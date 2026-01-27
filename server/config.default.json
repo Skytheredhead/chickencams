@@ -1,0 +1,82 @@
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0"
+  },
+  "paths": {
+    "streamsRoot": "./streams",
+    "recordingsRoot": "./recordings",
+    "activityRoot": "./activity"
+  },
+  "cameras": [
+    {
+      "id": "cam1",
+      "name": "Cam 1",
+      "enabled": true,
+      "source": "srt://0.0.0.0:9001?mode=listener"
+    },
+    {
+      "id": "cam2",
+      "name": "Cam 2",
+      "enabled": true,
+      "source": "srt://0.0.0.0:9002?mode=listener"
+    },
+    {
+      "id": "cam3",
+      "name": "Cam 3",
+      "enabled": true,
+      "source": "srt://0.0.0.0:9003?mode=listener"
+    },
+    {
+      "id": "cam4",
+      "name": "Cam 4",
+      "enabled": true,
+      "source": "srt://0.0.0.0:9004?mode=listener"
+    },
+    {
+      "id": "cam5",
+      "name": "Cam 5",
+      "enabled": true,
+      "source": "srt://0.0.0.0:9005?mode=listener"
+    }
+  ],
+  "hls": {
+    "segmentDurationSeconds": 1,
+    "livePlaylistSize": 6,
+    "recordingSegmentSeconds": 60,
+    "abr": [
+      {
+        "name": "master",
+        "resolution": "1280x720",
+        "fps": 30,
+        "bitrateKbps": 2000,
+        "maxrateKbps": 2200,
+        "bufsizeKbps": 4000
+      },
+      {
+        "name": "high",
+        "resolution": "1280x720",
+        "fps": 20,
+        "bitrateKbps": 1000,
+        "maxrateKbps": 1100,
+        "bufsizeKbps": 2000
+      },
+      {
+        "name": "mid",
+        "resolution": "1280x720",
+        "fps": 20,
+        "bitrateKbps": 500,
+        "maxrateKbps": 600,
+        "bufsizeKbps": 1200
+      },
+      {
+        "name": "low",
+        "resolution": "640x360",
+        "fps": 15,
+        "bitrateKbps": 100,
+        "maxrateKbps": 120,
+        "bufsizeKbps": 300
+      }
+    ]
+  }
+}

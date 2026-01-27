@@ -1,0 +1,16 @@
+{
+  "name": "chickencams",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js"
+  },
+  "dependencies": {
+    "archiver": "^6.0.2",
+    "express": "^4.19.2",
+    "mime-types": "^2.1.35",
+    "morgan": "^1.10.0"
+  }
+}
