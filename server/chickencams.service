@@ -1,0 +1,15 @@
+[Unit]
+Description=Chickencams server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/workspace/chickencams
+ExecStart=/usr/bin/node /workspace/chickencams/server/server.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=CHICKENCAMS_API_TOKEN=replace-with-a-long-secret
+
+[Install]
+WantedBy=multi-user.target

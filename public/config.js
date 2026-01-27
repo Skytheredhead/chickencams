@@ -2,6 +2,18 @@ const configList = document.getElementById("configList");
 const saveButton = document.getElementById("saveConfig");
 const status = document.getElementById("configStatus");
 let config = null;
+const apiTokenStorageKey = "chickencamsApiToken";
+
+function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
+  let token = localStorage.getItem(apiTokenStorageKey);
+  if (!token && promptIfMissing) {
+    token = window.prompt("Enter the Chickencams API token to continue:");
+    if (token) {
+      localStorage.setItem(apiTokenStorageKey, token);
+    }
+  }
+  return token;
+}
 
 function createCameraRow(camera) {
   const row = document.createElement("div");
@@ -36,7 +48,21 @@ function createCameraRow(camera) {
 }
 
 async function loadConfig() {
-  const response = await fetch("/api/config");
+  const apiToken = getApiToken({ promptIfMissing: true });
+  if (!apiToken) {
+    status.textContent = "Missing API token.";
+    return;
+  }
+  const response = await fetch("/api/config", {
+    headers: { Authorization: `Bearer ${apiToken}` }
+  });
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem(apiTokenStorageKey);
+    }
+    status.textContent = "Unable to load config.";
+    return;
+  }
   config = await response.json();
   configList.innerHTML = "";
   config.cameras.forEach((camera) => {
@@ -45,6 +71,15 @@ async function loadConfig() {
 }
 
 async function saveConfig() {
+  if (!config) {
+    status.textContent = "Config not loaded.";
+    return;
+  }
+  const apiToken = getApiToken({ promptIfMissing: true });
+  if (!apiToken) {
+    status.textContent = "Missing API token.";
+    return;
+  }
   const cameras = config.cameras.map((camera) => {
     const enabled = configList.querySelector(`input[type=checkbox][data-camera="${camera.id}"]`);
     const source = configList.querySelector(`input[type=text][data-camera="${camera.id}"]`);
@@ -57,10 +92,16 @@ async function saveConfig() {
 
   const response = await fetch("/api/config", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiToken}`
+    },
     body: JSON.stringify({ ...config, cameras })
   });
 
+  if (response.status === 401) {
+    localStorage.removeItem(apiTokenStorageKey);
+  }
   status.textContent = response.ok ? "Saved." : "Save failed.";
 }
 

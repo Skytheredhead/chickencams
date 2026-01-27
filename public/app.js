@@ -25,6 +25,20 @@ let activeAudioCamera = "cam1";
 let activityCursor = 0;
 let activityLoading = false;
 let activityDone = false;
+let rewindHls = null;
+
+const apiTokenStorageKey = "chickencamsApiToken";
+
+function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
+  let token = localStorage.getItem(apiTokenStorageKey);
+  if (!token && promptIfMissing) {
+    token = window.prompt("Enter the Chickencams API token to continue:");
+    if (token) {
+      localStorage.setItem(apiTokenStorageKey, token);
+    }
+  }
+  return token;
+}
 
 function setActiveSection(tab) {
   Object.entries(sections).forEach(([key, section]) => {
@@ -125,6 +139,9 @@ function toggleGlobalMute() {
 async function loadCameras() {
   try {
     const response = await fetch("/api/cameras");
+    if (!response.ok) {
+      throw new Error("Camera list unavailable");
+    }
     const data = await response.json();
     cameras = data.cameras ?? [];
   } catch (error) {
@@ -174,6 +191,10 @@ function attachLiveStream(video, cameraId, placeholder) {
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       placeholder?.classList.add("hidden");
     });
+    hls.on(Hls.Events.ERROR, () => {
+      placeholder?.classList.remove("hidden");
+      placeholder.textContent = "Live feed unavailable.";
+    });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = streamUrl;
     video.addEventListener("loadedmetadata", () => {
@@ -190,8 +211,11 @@ async function loadActivity() {
   activityStatus.textContent = "Loading…";
   try {
     const response = await fetch(`/api/activity?limit=5&cursor=${activityCursor}`);
+    if (!response.ok) {
+      throw new Error("Activity fetch failed");
+    }
     const data = await response.json();
-    data.items.forEach((item) => {
+    (data.items ?? []).forEach((item) => {
       const container = document.createElement("div");
       container.className = "activity-item";
       const video = document.createElement("video");
@@ -209,7 +233,7 @@ async function loadActivity() {
     });
 
     activityCursor = data.nextCursor ?? activityCursor;
-    activityDone = data.nextCursor == null;
+    activityDone = data.nextCursor == null || data.items?.length === 0;
     activityStatus.textContent = activityDone ? "No more clips." : "Scroll for more…";
   } catch (error) {
     activityStatus.textContent = "Activity feed unavailable in static preview.";
@@ -238,30 +262,45 @@ async function requestDownload() {
   const end = start + duration * 1000;
 
   downloadStatus.textContent = "Preparing download…";
-  const response = await fetch("/api/download", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      cameras: checked.map((item) => item.value),
-      startTimestamp: start,
-      endTimestamp: end
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    downloadStatus.textContent = error.error ?? "Download failed.";
+  const apiToken = getApiToken({ promptIfMissing: true });
+  if (!apiToken) {
+    downloadStatus.textContent = "Download cancelled (missing API token).";
     return;
   }
+  try {
+    const response = await fetch("/api/download", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiToken}`
+      },
+      body: JSON.stringify({
+        cameras: checked.map((item) => item.value),
+        startTimestamp: start,
+        endTimestamp: end
+      })
+    });
 
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "chickencams-download.zip";
-  link.click();
-  URL.revokeObjectURL(url);
-  downloadStatus.textContent = "Download ready.";
+    if (!response.ok) {
+      const error = await response.json();
+      if (response.status === 401) {
+        localStorage.removeItem(apiTokenStorageKey);
+      }
+      downloadStatus.textContent = error.error ?? "Download failed.";
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "chickencams-download.zip";
+    link.click();
+    URL.revokeObjectURL(url);
+    downloadStatus.textContent = "Download ready.";
+  } catch (error) {
+    downloadStatus.textContent = "Download failed. Check the server logs.";
+  }
 }
 
 function loadRewindStream() {
@@ -269,14 +308,18 @@ function loadRewindStream() {
   if (!cameraId) {
     return;
   }
+  if (rewindHls) {
+    rewindHls.destroy();
+    rewindHls = null;
+  }
   const streamUrl = `/api/rewind/${cameraId}`;
   if (window.Hls && Hls.isSupported()) {
-    const hls = new Hls({
+    rewindHls = new Hls({
       lowLatencyMode: false,
       maxLiveSyncPlaybackRate: 1.0
     });
-    hls.loadSource(streamUrl);
-    hls.attachMedia(rewindPlayer);
+    rewindHls.loadSource(streamUrl);
+    rewindHls.attachMedia(rewindPlayer);
   } else if (rewindPlayer.canPlayType("application/vnd.apple.mpegurl")) {
     rewindPlayer.src = streamUrl;
   }

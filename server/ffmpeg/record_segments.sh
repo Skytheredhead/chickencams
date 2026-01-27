@@ -6,6 +6,17 @@ SOURCE_URL=${2:?"source url required"}
 OUTPUT_DIR=${3:-"./recordings"}
 FONT_PATH=${4:-"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"}
 
+ENCODER="h264_nvenc"
+PRESET="p4"
+TUNE=()
+PIX_FMT="yuv420p"
+
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+  ENCODER="libx264"
+  PRESET="veryfast"
+  TUNE=(-tune zerolatency)
+fi
+
 mkdir -p "${OUTPUT_DIR}/${CAMERA_ID}"
 
 TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%m/%d/%Y - %H\\:%M\\:%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
@@ -13,7 +24,7 @@ TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%m/%d/%Y - 
 ffmpeg \
   -i "${SOURCE_URL}" \
   -vf "${TIMESTAMP_FILTER}" \
-  -c:v h264_nvenc -preset p4 -b:v 2000k -maxrate 2200k -bufsize 4000k -r 30 -g 30 -keyint_min 30 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
+  -c:v "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v 2000k -maxrate 2200k -bufsize 4000k -r 30 -g 30 -keyint_min 30 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
   -c:a aac -b:a 96k -ac 2 \
   -f segment \
   -segment_time 60 \

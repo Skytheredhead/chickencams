@@ -12,6 +12,17 @@ npm run start
 - User UI: `http://chickens.local:3000/`
 - Config UI: `http://chickens.local:3000/config`
 
+## Configuration and security
+
+- The server loads defaults from `server/config.default.json` and applies overrides from `server/config.json` if present.
+- Set an API token to enable the config and download endpoints:
+
+```bash
+export CHICKENCAMS_API_TOKEN="replace-with-a-long-secret"
+```
+
+The UI will prompt for the token when you open `/config` or request a download.
+
 ## Live feeds
 
 Live playback uses HLS with low-latency settings. The server is ready to accept USB or RTSP inputs, then transcode with NVENC and burn timestamps into the video frames.
@@ -47,3 +58,13 @@ Point the rewind player at an HLS DVR playlist (for example, `./streams/<cameraI
 ## Aggregator PC
 
 See [`Aggregator PC/README.md`](Aggregator%20PC/README.md) for the ThinkPad-side capture instructions.
+
+## Deployment (systemd)
+
+Use the sample unit file below to enable automatic restarts:
+
+```bash
+sudo cp server/chickencams.service /etc/systemd/system/chickencams.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now chickencams
+```
