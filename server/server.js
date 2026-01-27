@@ -90,7 +90,13 @@ app.post("/api/download", async (req, res) => {
   archive.pipe(res);
 
   for (const cameraId of cameras) {
-    const segments = findSegmentsForRange(recordingsRoot, cameraId, startSeconds, endSeconds);
+    const segments = findSegmentsForRange(
+      recordingsRoot,
+      cameraId,
+      startSeconds,
+      endSeconds,
+      config.hls.recordingSegmentSeconds
+    );
     if (segments.length === 0) {
       continue;
     }
@@ -153,11 +159,12 @@ function readActivityItems(root) {
   return items.sort((a, b) => b.timestamp - a.timestamp);
 }
 
-function findSegmentsForRange(root, cameraId, start, end) {
+function findSegmentsForRange(root, cameraId, start, end, segmentDurationSeconds) {
   const cameraDir = path.join(root, cameraId);
   if (!fs.existsSync(cameraDir)) {
     return [];
   }
+  const duration = Number.isFinite(segmentDurationSeconds) ? segmentDurationSeconds : 60;
   return fs
     .readdirSync(cameraDir)
     .filter((file) => file.endsWith(".mp4"))
@@ -166,7 +173,7 @@ function findSegmentsForRange(root, cameraId, start, end) {
       timestamp: Number.parseInt(file.split(".")[0], 10)
     }))
     .filter((entry) => Number.isFinite(entry.timestamp))
-    .filter((entry) => entry.timestamp >= start && entry.timestamp <= end)
+    .filter((entry) => entry.timestamp + duration > start && entry.timestamp <= end)
     .sort((a, b) => a.timestamp - b.timestamp)
     .map((entry) => path.join(cameraDir, entry.file));
 }
