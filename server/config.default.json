@@ -1,7 +1,8 @@
 {
   "server": {
     "port": 3000,
-    "host": "0.0.0.0"
+    "host": "0.0.0.0",
+    "apiToken": ""
   },
   "paths": {
     "streamsRoot": "./streams",
@@ -44,6 +45,7 @@
     "segmentDurationSeconds": 1,
     "livePlaylistSize": 6,
     "recordingSegmentSeconds": 60,
+    "recordingSafetyBufferSeconds": 5,
     "abr": [
       {
         "name": "master",
