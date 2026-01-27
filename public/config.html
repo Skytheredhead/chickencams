@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chickencams Config</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Chickencams Configuration</h1>
+      </header>
+
+      <section class="section">
+        <div class="card">
+          <h2>Camera Sources</h2>
+          <p class="notice">Select which cameras appear in the UI and update their ingest URLs.</p>
+          <div id="configList" class="activity-list"></div>
+          <button class="primary-button" id="saveConfig">Save configuration</button>
+          <p class="notice" id="configStatus"></p>
+        </div>
+      </section>
+    </main>
+    <script src="/config.js"></script>
+  </body>
+</html>
