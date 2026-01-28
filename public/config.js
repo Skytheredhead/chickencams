@@ -44,7 +44,18 @@ function createCameraRow(camera) {
   meta.className = "activity-meta";
 
   const title = document.createElement("strong");
-  title.textContent = camera.name;
+  title.textContent = camera.id;
+
+  const nameField = document.createElement("div");
+  nameField.className = "field";
+  const nameLabel = document.createElement("label");
+  nameLabel.textContent = "Camera name";
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = camera.name;
+  nameInput.dataset.camera = camera.id;
+  nameInput.dataset.field = "name";
+  nameField.append(nameLabel, nameInput);
 
   const enabledLabel = document.createElement("label");
   enabledLabel.textContent = "Enabled";
@@ -57,13 +68,18 @@ function createCameraRow(camera) {
   enabled.dataset.camera = camera.id;
   enabledLabel.prepend(enabled);
 
+  const sourceField = document.createElement("div");
+  sourceField.className = "field";
+  const sourceLabel = document.createElement("label");
+  sourceLabel.textContent = "Source URL";
   const source = document.createElement("input");
   source.type = "text";
   source.value = camera.source;
   source.dataset.camera = camera.id;
-  source.style.width = "100%";
+  source.dataset.field = "source";
+  sourceField.append(sourceLabel, source);
 
-  meta.append(title, enabledLabel, source);
+  meta.append(title, nameField, enabledLabel, sourceField);
   row.append(meta);
   return row;
 }
@@ -103,9 +119,11 @@ async function saveConfig() {
   }
   const cameras = config.cameras.map((camera) => {
     const enabled = configList.querySelector(`input[type=checkbox][data-camera="${camera.id}"]`);
-    const source = configList.querySelector(`input[type=text][data-camera="${camera.id}"]`);
+    const source = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="source"]`);
+    const nameInput = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="name"]`);
     return {
       ...camera,
+      name: nameInput?.value ?? camera.name,
       enabled: enabled?.checked ?? camera.enabled,
       source: source?.value ?? camera.source
     };
