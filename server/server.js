@@ -257,11 +257,12 @@ async function startCameraEncoders() {
       }
     }
     if (!encoderProcesses.has(hlsLabel)) {
-      spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot], hlsLabel);
+      const recordingsArg = isSrtListener(camera.source) ? recordingsRoot : "";
+      spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot, recordingsArg], hlsLabel);
     }
     if (isSrtListener(camera.source)) {
       console.warn(
-        `[encoders] ${camera.id} recording skipped because SRT listener sources cannot be shared between multiple ffmpeg processes.`
+        `[encoders] ${camera.id} recording handled by the HLS encoder for SRT listener sources.`
       );
       continue;
     }
