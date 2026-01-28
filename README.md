@@ -2,15 +2,31 @@
 
 A LAN-first multi-camera viewer with live feeds, activity playback, rewind (DVR), and clip downloads.
 
+## About
+
+Chickencams is a single-node server + web UI meant for local networks. It exposes a simple web UI for live camera feeds, a rewind timeline backed by HLS DVR playlists, and on-demand downloads built from recorded segments. The design assumes you already have per-camera encoders running (USB or RTSP capture) and focuses on presenting the feeds, activity clips, and downloads in one place.
+
 ## Quick start
+
+1. Install dependencies and start the server:
 
 ```bash
 npm install
 npm run start
 ```
 
+2. Open the UI in a browser:
+
 - User UI: `http://chickens.local:3000/`
 - Config UI: `http://chickens.local:3000/config`
+
+If you are not using `chickens.local`, swap in the host IP or hostname where the server is running.
+
+## Requirements
+
+- Node.js 18+ (uses native ES modules).
+- ffmpeg available on the host running the encoder scripts.
+- A shared storage location for HLS streams, recordings, and activity clips.
 
 ## Configuration and security
 
@@ -22,6 +38,19 @@ export CHICKENCAMS_API_TOKEN="replace-with-a-long-secret"
 ```
 
 The UI will prompt for the token when you open `/config` or request a download.
+
+## Project layout
+
+- `server/` — Express server, API endpoints, and ffmpeg scripts.
+- `public/` — Static front-end assets served by the server.
+- `streams/` — HLS output directory (created by encoders).
+- `recordings/` — 60-second MP4 segments for downloads (created by the recorder).
+- `activity/` — Motion-triggered clips (copied in externally).
+
+## Scripts
+
+- `npm run start` — Start the server (production-style).
+- `npm run dev` — Start the server (same as start, handy for local work).
 
 ## Live feeds
 
