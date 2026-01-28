@@ -15,7 +15,13 @@
       <section class="section">
         <div class="card">
           <h2>Camera Sources</h2>
-          <p class="notice">Select which cameras appear in the UI and update their ingest URLs. You'll be prompted for the 6-digit pairing code shown in the server logs.</p>
+          <p class="notice">Set the aggregator host and camera ports, then rename or enable cameras.</p>
+          <div class="form-grid">
+            <div class="field">
+              <label for="aggregatorHost">Aggregator IP / host</label>
+              <input id="aggregatorHost" type="text" placeholder="192.168.1.50" />
+            </div>
+          </div>
           <div id="configList" class="activity-list"></div>
           <button class="primary-button" id="saveConfig">Save configuration</button>
           <p class="notice" id="configStatus"></p>

@@ -1,41 +1,22 @@
 const configList = document.getElementById("configList");
 const saveButton = document.getElementById("saveConfig");
 const status = document.getElementById("configStatus");
+const aggregatorHostInput = document.getElementById("aggregatorHost");
 let config = null;
-const apiTokenStorageKey = "chickencamsApiToken";
 
-async function requestPairingToken() {
-  const pairingCode = window.prompt("Enter the 6-digit pairing code shown in the server logs:");
-  if (!pairingCode) {
+function parseSrtSource(source) {
+  if (typeof source !== "string") {
     return null;
   }
-  try {
-    const response = await fetch("/api/pair", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: pairingCode })
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    return typeof data.token === "string" ? data.token : null;
-  } catch (error) {
+  const match = source.match(/^srt:\\/\\/([^:/?]+)(?::(\\d+))?/i);
+  if (!match) {
     return null;
   }
+  return {
+    host: match[1] ?? "",
+    port: match[2] ? Number.parseInt(match[2], 10) : null
+  };
 }
-
-async function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
-  let token = localStorage.getItem(apiTokenStorageKey);
-  if (!token && promptIfMissing) {
-    token = await requestPairingToken();
-    if (token) {
-      localStorage.setItem(apiTokenStorageKey, token);
-    }
-  }
-  return token;
-}
-
 function createCameraRow(camera) {
   const row = document.createElement("div");
   row.className = "activity-item";
@@ -44,7 +25,18 @@ function createCameraRow(camera) {
   meta.className = "activity-meta";
 
   const title = document.createElement("strong");
-  title.textContent = camera.name;
+  title.textContent = camera.id;
+
+  const nameField = document.createElement("div");
+  nameField.className = "field";
+  const nameLabel = document.createElement("label");
+  nameLabel.textContent = "Camera name";
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = camera.name;
+  nameInput.dataset.camera = camera.id;
+  nameInput.dataset.field = "name";
+  nameField.append(nameLabel, nameInput);
 
   const enabledLabel = document.createElement("label");
   enabledLabel.textContent = "Enabled";
@@ -57,37 +49,41 @@ function createCameraRow(camera) {
   enabled.dataset.camera = camera.id;
   enabledLabel.prepend(enabled);
 
+  const sourceField = document.createElement("div");
+  sourceField.className = "field";
+  const sourceLabel = document.createElement("label");
+  sourceLabel.textContent = "Port";
   const source = document.createElement("input");
-  source.type = "text";
-  source.value = camera.source;
+  source.type = "number";
+  source.min = "1";
+  source.max = "65535";
+  source.value = camera.port ?? "";
   source.dataset.camera = camera.id;
-  source.style.width = "100%";
+  source.dataset.field = "port";
+  sourceField.append(sourceLabel, source);
 
-  meta.append(title, enabledLabel, source);
+  meta.append(title, nameField, enabledLabel, sourceField);
   row.append(meta);
   return row;
 }
 
 async function loadConfig() {
-  const apiToken = await getApiToken({ promptIfMissing: true });
-  if (!apiToken) {
-    status.textContent = "Missing pairing code.";
-    return;
-  }
-  const response = await fetch("/api/config", {
-    headers: { Authorization: `Bearer ${apiToken}` }
-  });
+  const response = await fetch("/api/config");
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem(apiTokenStorageKey);
-    }
     status.textContent = "Unable to load config.";
     return;
   }
   config = await response.json();
+  const fallbackHost = config.cameras
+    ?.map((camera) => parseSrtSource(camera.source)?.host)
+    ?.find((host) => host);
+  if (aggregatorHostInput) {
+    aggregatorHostInput.value = config.ingestHost || fallbackHost || "";
+  }
   configList.innerHTML = "";
   config.cameras.forEach((camera) => {
-    configList.appendChild(createCameraRow(camera));
+    const parsed = parseSrtSource(camera.source);
+    configList.appendChild(createCameraRow({ ...camera, port: parsed?.port ?? "" }));
   });
 }
 
@@ -96,33 +92,30 @@ async function saveConfig() {
     status.textContent = "Config not loaded.";
     return;
   }
-  const apiToken = await getApiToken({ promptIfMissing: true });
-  if (!apiToken) {
-    status.textContent = "Missing pairing code.";
-    return;
-  }
   const cameras = config.cameras.map((camera) => {
     const enabled = configList.querySelector(`input[type=checkbox][data-camera="${camera.id}"]`);
-    const source = configList.querySelector(`input[type=text][data-camera="${camera.id}"]`);
+    const port = configList.querySelector(`input[type=number][data-camera="${camera.id}"][data-field="port"]`);
+    const nameInput = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="name"]`);
     return {
       ...camera,
+      name: nameInput?.value ?? camera.name,
       enabled: enabled?.checked ?? camera.enabled,
-      source: source?.value ?? camera.source
+      port: port?.value ?? ""
     };
   });
 
   const response = await fetch("/api/config", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiToken}`
+      "Content-Type": "application/json"
     },
-    body: JSON.stringify({ ...config, cameras })
+    body: JSON.stringify({
+      ...config,
+      ingestHost: aggregatorHostInput?.value ?? config.ingestHost,
+      cameras
+    })
   });
 
-  if (response.status === 401) {
-    localStorage.removeItem(apiTokenStorageKey);
-  }
   status.textContent = response.ok ? "Saved." : "Save failed.";
 }
 

@@ -5,7 +5,7 @@ This folder contains the ThinkPad-side scripts that capture USB webcams and push
 ## Expected flow
 
 1. Plug webcams into the aggregator ThinkPad (Linux).
-2. Map each `/dev/video*` device to a camera ID (cam1-cam5).
+2. Map each camera to a stable `/dev/v4l/by-id` or `/dev/v4l/by-path` symlink (avoid `/dev/video*`).
 3. Run the capture script for each camera.
 
 ## Quick UI (LAN-accessible)
@@ -25,10 +25,25 @@ The UI listens on port `3010` by default, lists the aggregator's LAN IPs, and pr
 ## Capture command (SRT recommended)
 
 ```bash
-./capture.sh cam1 /dev/video0 chickens.local 9001
+./capture.sh cam1 /dev/v4l/by-id/usb-camera-cam1 chickens.local 9001
 ```
 
 This sends an H.264 stream over SRT to the server listener port defined in `server/config.default.json`.
+
+## Camera registry + supervisor
+
+For stable device binding, watchdog restarts, and hotplug handling, update `registry.json` and run the supervisor:
+
+```bash
+node "Aggregator PC/supervisor.js"
+```
+
+The supervisor:
+
+- Uses stable `/dev/v4l/by-id` or `/dev/v4l/by-path` symlinks.
+- Restarts frozen streams and crashed processes.
+- Stops streams when devices disappear and auto-resumes on replug.
+- Writes telemetry to `Aggregator PC/telemetry.json`.
 
 ## Notes
 

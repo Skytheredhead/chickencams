@@ -6,17 +6,35 @@ DEVICE=${2:?"video device required (/dev/video0)"}
 SERVER_HOST=${3:?"server hostname required"}
 SERVER_PORT=${4:?"server port required"}
 
+if [[ "${DEVICE}" =~ ^/dev/video[0-9]+$ ]]; then
+  echo "Error: Use a stable /dev/v4l/by-id or /dev/v4l/by-path symlink instead of ${DEVICE}." >&2
+  exit 1
+fi
+
+PROGRESS_ARGS=()
+if [[ "${FFMPEG_PROGRESS:-}" == "1" ]]; then
+  PROGRESS_ARGS=(-progress pipe:1 -nostats)
+fi
+
 ffmpeg \
+  -fflags nobuffer \
+  -flags low_delay \
+  -thread_queue_size 64 \
   -f v4l2 \
   -framerate 30 \
   -video_size 1280x720 \
   -i "${DEVICE}" \
+  -use_wallclock_as_timestamps 1 \
   -c:v libx264 \
   -preset veryfast \
   -tune zerolatency \
   -b:v 2500k \
   -maxrate 2800k \
   -bufsize 4000k \
+  -fps_mode drop \
+  -max_delay 0 \
+  -flush_packets 1 \
   -pix_fmt yuv420p \
   -f mpegts \
+  "${PROGRESS_ARGS[@]}" \
   "srt://${SERVER_HOST}:${SERVER_PORT}?mode=caller&transtype=live&latency=50"

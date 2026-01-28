@@ -6,7 +6,6 @@ import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
 import { spawn } from "child_process";
-import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,14 +27,41 @@ function loadConfig() {
     paths: { ...base.paths, ...override.paths },
     hls: { ...base.hls, ...override.hls },
     storage: { ...base.storage, ...override.storage },
+    health: { ...base.health, ...override.health },
+    ingestHost: normalizeString(override.ingestHost) || normalizeString(base.ingestHost) || "0.0.0.0",
     cameras: Array.isArray(override.cameras) ? override.cameras : base.cameras
   };
 }
 
 let config = loadConfig();
+const cameraRegistryPath = path.resolve(rootDir, config.paths?.cameraRegistryPath || "camera-registry.json");
+
+function loadCameraRegistry(baseCameras) {
+  if (!fs.existsSync(cameraRegistryPath)) {
+    return baseCameras;
+  }
+  try {
+    const registry = readJson(cameraRegistryPath);
+    if (Array.isArray(registry)) {
+      return registry;
+    }
+    if (Array.isArray(registry.cameras)) {
+      return registry.cameras;
+    }
+  } catch (error) {
+    console.warn(`Failed to read camera registry at ${cameraRegistryPath}:`, error.message);
+  }
+  return baseCameras;
+}
+
+config = {
+  ...config,
+  cameras: loadCameraRegistry(config.cameras)
+};
 
 function persistRuntimeConfig() {
-  fs.writeFileSync(runtimeConfigPath, JSON.stringify(config, null, 2));
+  const { cameras: _cameras, ...runtimeConfig } = config;
+  fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
 }
 
 const app = express();
@@ -53,33 +79,12 @@ function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function generatePairingCode() {
-  return `${Math.floor(100000 + Math.random() * 900000)}`;
-}
-
-function generateApiToken() {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-let apiToken = normalizeString(process.env.CHICKENCAMS_API_TOKEN || "") || normalizeString(config.server.apiToken) || null;
-let pairingCode = normalizeString(config.server.pairingCode) || null;
-
-if (!apiToken) {
-  apiToken = generateApiToken();
-  if (!pairingCode) {
-    pairingCode = generatePairingCode();
+function buildSrtSource(ingestHost, port, fallbackSource) {
+  if (!Number.isFinite(port)) {
+    return normalizeString(fallbackSource);
   }
-  config = {
-    ...config,
-    server: {
-      ...config.server,
-      apiToken,
-      pairingCode
-    }
-  };
-  persistRuntimeConfig();
-  console.warn("CHICKENCAMS_API_TOKEN was missing. Generated a token and pairing code.");
-  console.warn(`Pairing code: ${pairingCode}`);
+  const host = normalizeString(ingestHost) || "0.0.0.0";
+  return `srt://${host}:${port}?mode=listener`;
 }
 
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
@@ -155,19 +160,6 @@ enforceBackupStorageCap();
 setInterval(enforceBackupStorageCap, 10 * 60 * 1000);
 
 function requireApiToken(req, res, next) {
-  if (!apiToken) {
-    res.status(503).json({
-      error: "API token not configured. Set CHICKENCAMS_API_TOKEN or server.apiToken."
-    });
-    return;
-  }
-  const authHeader = req.get("authorization") ?? "";
-  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const headerToken = req.get("x-api-key") ?? bearer;
-  if (!headerToken || headerToken !== apiToken) {
-    res.status(401).json({ error: "Unauthorized." });
-    return;
-  }
   next();
 }
 
@@ -186,19 +178,6 @@ app.get("/config", (req, res) => {
   res.sendFile(path.join(publicDir, "config.html"));
 });
 
-app.post("/api/pair", (req, res) => {
-  if (!pairingCode || !apiToken) {
-    res.status(404).json({ error: "Pairing unavailable." });
-    return;
-  }
-  const code = normalizeString(req.body?.code);
-  if (!code || code !== pairingCode) {
-    res.status(401).json({ error: "Invalid pairing code." });
-    return;
-  }
-  res.json({ token: apiToken });
-});
-
 app.get("/api/config", requireApiToken, (req, res) => {
   res.json(config);
 });
@@ -210,22 +189,35 @@ app.post("/api/config", requireApiToken, (req, res) => {
     res.status(400).json({ error: "Invalid camera payload." });
     return;
   }
+  const ingestHost = normalizeString(payload.ingestHost) || config.ingestHost || "0.0.0.0";
   const updated = {
     ...config,
+    ingestHost,
     cameras: cameras.map((camera, index) => ({
       id: typeof camera.id === "string" ? camera.id : config.cameras[index]?.id ?? `cam${index + 1}`,
       name: typeof camera.name === "string" ? camera.name : config.cameras[index]?.name ?? `Cam ${index + 1}`,
       enabled: Boolean(camera.enabled),
-      source: typeof camera.source === "string" ? camera.source : config.cameras[index]?.source ?? ""
+      source: buildSrtSource(
+        ingestHost,
+        Number.parseInt(camera.port, 10),
+        typeof camera.source === "string" ? camera.source : config.cameras[index]?.source ?? ""
+      )
     }))
   };
-  fs.writeFileSync(runtimeConfigPath, JSON.stringify(updated, null, 2));
+  const { cameras: _cameras, ...runtimeConfig } = updated;
+  fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
+  fs.writeFileSync(cameraRegistryPath, JSON.stringify({ cameras: updated.cameras }, null, 2));
   config = updated;
   res.json({ status: "ok" });
 });
 
 app.get("/api/cameras", (req, res) => {
-  res.json({ cameras: config.cameras });
+  res.json({
+    cameras: config.cameras.map((camera) => ({
+      ...camera,
+      health: getCameraHealth(camera.id)
+    }))
+  });
 });
 
 app.get("/api/activity", (req, res) => {
@@ -383,6 +375,50 @@ function readActivityItems(root) {
     }
   }
   return items.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function getLatestSegmentMtimeMs(cameraId) {
+  const cameraDir = path.join(streamsRoot, cameraId);
+  if (!fs.existsSync(cameraDir)) {
+    return null;
+  }
+  const variants = fs
+    .readdirSync(cameraDir)
+    .filter((entry) => fs.statSync(path.join(cameraDir, entry)).isDirectory());
+  let latest = null;
+  variants.forEach((variant) => {
+    const variantDir = path.join(cameraDir, variant);
+    if (!fs.existsSync(variantDir)) {
+      return;
+    }
+    const entries = fs.readdirSync(variantDir).filter((file) => file.endsWith(".ts"));
+    entries.forEach((file) => {
+      try {
+        const stats = fs.statSync(path.join(variantDir, file));
+        latest = latest == null ? stats.mtimeMs : Math.max(latest, stats.mtimeMs);
+      } catch (error) {
+        return;
+      }
+    });
+  });
+  return latest;
+}
+
+function getCameraHealth(cameraId) {
+  const onlineSeconds = Number.isFinite(config.health?.onlineSeconds) ? config.health.onlineSeconds : 5;
+  const degradedSeconds = Number.isFinite(config.health?.degradedSeconds) ? config.health.degradedSeconds : 15;
+  const lastSegmentMs = getLatestSegmentMtimeMs(cameraId);
+  if (!lastSegmentMs) {
+    return { status: "OFFLINE", lastSegmentMs: null };
+  }
+  const ageSeconds = (Date.now() - lastSegmentMs) / 1000;
+  if (ageSeconds <= onlineSeconds) {
+    return { status: "ONLINE", lastSegmentMs };
+  }
+  if (ageSeconds <= degradedSeconds) {
+    return { status: "DEGRADED", lastSegmentMs };
+  }
+  return { status: "OFFLINE", lastSegmentMs };
 }
 
 function findSegmentsForRange(root, cameraId, start, end, segmentDurationSeconds, safetyBufferSeconds) {

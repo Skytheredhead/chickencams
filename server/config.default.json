@@ -1,14 +1,18 @@
 {
   "server": {
     "port": 3000,
-    "host": "0.0.0.0",
-    "apiToken": "",
-    "pairingCode": ""
+    "host": "0.0.0.0"
   },
   "paths": {
     "streamsRoot": "./streams",
     "recordingsRoot": "./recordings",
-    "activityRoot": "./activity"
+    "activityRoot": "./activity",
+    "cameraRegistryPath": "./server/camera-registry.json"
+  },
+  "ingestHost": "0.0.0.0",
+  "health": {
+    "onlineSeconds": 5,
+    "degradedSeconds": 15
   },
   "storage": {
     "maxBackupGb": 50
