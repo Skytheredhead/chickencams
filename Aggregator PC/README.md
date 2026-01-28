@@ -16,6 +16,10 @@ Launch the Aggregator UI to pick from available `/dev/video*` devices and start/
 node "Aggregator PC/aggregator-ui.js"
 ```
 
+### One-click launcher (Linux file managers)
+
+Double-click `Aggregator UI.desktop` in this folder to run the same UI without typing commands. If your desktop asks to mark it as trusted/executable, confirm once. The launcher runs `launch-aggregator-ui.sh`, opens `http://localhost:3010/`, and starts the UI in a terminal.
+
 The UI listens on port `3010` by default, lists the aggregator's LAN IPs, and prints LAN URLs on startup (override with `AGGREGATOR_UI_PORT`).
 
 ## Capture command (SRT recommended)

@@ -22,6 +22,15 @@ npm run start
 
 If you are not using `chickens.local`, swap in the host IP or hostname where the server is running.
 
+## One-click launchers (Linux file managers)
+
+If you prefer to start Chickencams without typing commands, use the clickable launcher files in the repo root:
+
+1. Double-click `Chickencams.desktop`.
+2. If your desktop asks to mark it as trusted/executable, confirm once.
+
+The launcher runs `launch-chickencams.sh`, opens `http://localhost:3000/`, and starts the server in a terminal.
+
 ## Requirements
 
 - Node.js 18+ (uses native ES modules).
