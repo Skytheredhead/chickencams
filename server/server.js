@@ -114,6 +114,10 @@ function isSrtSource(source) {
   return typeof source === "string" && source.startsWith("srt://");
 }
 
+function isSrtListener(source) {
+  return typeof source === "string" && /mode=listener/i.test(source);
+}
+
 function hasFfmpeg() {
   const result = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
   return result.status === 0;
@@ -254,6 +258,12 @@ async function startCameraEncoders() {
     }
     if (!encoderProcesses.has(hlsLabel)) {
       spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot], hlsLabel);
+    }
+    if (isSrtListener(camera.source)) {
+      console.warn(
+        `[encoders] ${camera.id} recording skipped because SRT listener sources cannot be shared between multiple ffmpeg processes.`
+      );
+      continue;
     }
     if (!encoderProcesses.has(recordLabel)) {
       spawnEncoder("record_segments.sh", [camera.id, camera.source, recordingsRoot], recordLabel);
