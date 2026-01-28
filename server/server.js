@@ -139,19 +139,36 @@ function spawnEncoder(scriptName, args, label) {
 }
 
 function listUdpPortOwners(port) {
-  if (!hasCommand("lsof")) {
-    return [];
+  if (hasCommand("lsof")) {
+    const result = spawnSync("lsof", ["-nP", `-iUDP:${port}`], { encoding: "utf-8" });
+    if (result.status === 0 && result.stdout) {
+      const lines = result.stdout.split("\n").slice(1).filter(Boolean);
+      return lines
+        .map((line) => line.trim().split(/\s+/))
+        .filter((parts) => parts.length >= 2)
+        .map(([command, pid]) => ({ command, pid: Number.parseInt(pid, 10) }))
+        .filter((entry) => Number.isFinite(entry.pid));
+    }
   }
-  const result = spawnSync("lsof", ["-nP", `-iUDP:${port}`], { encoding: "utf-8" });
-  if (result.status !== 0 || !result.stdout) {
-    return [];
+  if (hasCommand("ss")) {
+    const result = spawnSync("ss", ["-u", "-l", "-n", "-p"], { encoding: "utf-8" });
+    if (result.status !== 0 || !result.stdout) {
+      return [];
+    }
+    const owners = [];
+    for (const line of result.stdout.split("\n")) {
+      if (!line.includes(`:${port}`)) {
+        continue;
+      }
+      const match = line.match(/users:\(\("([^"]+)",pid=(\d+)/);
+      if (!match) {
+        continue;
+      }
+      owners.push({ command: match[1], pid: Number.parseInt(match[2], 10) });
+    }
+    return owners.filter((entry) => Number.isFinite(entry.pid));
   }
-  const lines = result.stdout.split("\n").slice(1).filter(Boolean);
-  return lines
-    .map((line) => line.trim().split(/\s+/))
-    .filter((parts) => parts.length >= 2)
-    .map(([command, pid]) => ({ command, pid: Number.parseInt(pid, 10) }))
-    .filter((entry) => Number.isFinite(entry.pid));
+  return [];
 }
 
 async function releaseFfmpegPort(port) {
