@@ -74,6 +74,7 @@ app.use(express.static(publicDir));
 const streamsRoot = path.resolve(rootDir, config.paths.streamsRoot);
 const recordingsRoot = path.resolve(rootDir, config.paths.recordingsRoot);
 const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
+const encoderRoot = path.join(__dirname, "ffmpeg");
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -105,6 +106,46 @@ function ensureStoragePaths() {
 }
 
 ensureStoragePaths();
+
+const encoderProcesses = new Map();
+
+function isSrtSource(source) {
+  return typeof source === "string" && source.startsWith("srt://");
+}
+
+function spawnEncoder(scriptName, args, label) {
+  const scriptPath = path.join(encoderRoot, scriptName);
+  const child = spawn(scriptPath, args, { stdio: "inherit" });
+  encoderProcesses.set(label, child);
+  child.on("close", (code) => {
+    encoderProcesses.delete(label);
+    console.warn(`[encoders] ${label} stopped with code ${code ?? "unknown"}.`);
+  });
+  child.on("error", (error) => {
+    encoderProcesses.delete(label);
+    console.warn(`[encoders] ${label} failed to start: ${error.message}`);
+  });
+}
+
+function startCameraEncoders() {
+  if (!config.autoStartEncoders) {
+    console.log("[encoders] Auto-start disabled.");
+    return;
+  }
+  for (const camera of config.cameras) {
+    if (!camera.enabled || !isSrtSource(camera.source)) {
+      continue;
+    }
+    const hlsLabel = `${camera.id}:hls`;
+    const recordLabel = `${camera.id}:record`;
+    if (!encoderProcesses.has(hlsLabel)) {
+      spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot], hlsLabel);
+    }
+    if (!encoderProcesses.has(recordLabel)) {
+      spawnEncoder("record_segments.sh", [camera.id, camera.source, recordingsRoot], recordLabel);
+    }
+  }
+}
 
 function listBackupFiles(root) {
   if (!fs.existsSync(root)) {
@@ -546,4 +587,5 @@ function startServer(port, host, attemptsRemaining = 5) {
 }
 
 const { port, host } = config.server;
+startCameraEncoders();
 startServer(port, host);

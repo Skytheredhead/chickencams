@@ -61,7 +61,9 @@ The launcher runs `launch-chickencams.sh`, opens `http://localhost:3000/`, and s
 
 Live playback uses HLS with low-latency settings. The server is ready to accept USB or RTSP inputs, then transcode with NVENC and burn timestamps into the video frames.
 
-Run the per-camera encoders (one per camera):
+By default the server auto-starts the per-camera encoder and recorder jobs for enabled cameras at boot. You can disable this by setting `autoStartEncoders` to `false` in `server/config.json` or `server/config.default.json`.
+
+Manual run (one per camera):
 
 ```bash
 ./server/ffmpeg/encode_hls.sh cam1 "srt://0.0.0.0:9001?mode=listener" ./streams
