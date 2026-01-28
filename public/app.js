@@ -29,10 +29,31 @@ let rewindHls = null;
 
 const apiTokenStorageKey = "chickencamsApiToken";
 
-function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
+async function requestPairingToken() {
+  const pairingCode = window.prompt("Enter the 6-digit pairing code shown in the server logs:");
+  if (!pairingCode) {
+    return null;
+  }
+  try {
+    const response = await fetch("/api/pair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: pairingCode })
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return typeof data.token === "string" ? data.token : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
   let token = localStorage.getItem(apiTokenStorageKey);
   if (!token && promptIfMissing) {
-    token = window.prompt("Enter the Chickencams API token to continue:");
+    token = await requestPairingToken();
     if (token) {
       localStorage.setItem(apiTokenStorageKey, token);
     }
@@ -262,9 +283,9 @@ async function requestDownload() {
   const end = start + duration * 1000;
 
   downloadStatus.textContent = "Preparing download…";
-  const apiToken = getApiToken({ promptIfMissing: true });
+  const apiToken = await getApiToken({ promptIfMissing: true });
   if (!apiToken) {
-    downloadStatus.textContent = "Download cancelled (missing API token).";
+    downloadStatus.textContent = "Download cancelled (missing pairing code).";
     return;
   }
   try {

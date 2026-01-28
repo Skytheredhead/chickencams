@@ -6,6 +6,7 @@ import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
 import { spawn } from "child_process";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +33,10 @@ function loadConfig() {
 
 let config = loadConfig();
 
+function persistRuntimeConfig() {
+  fs.writeFileSync(runtimeConfigPath, JSON.stringify(config, null, 2));
+}
+
 const app = express();
 app.use(morgan("dev"));
 app.use(express.json());
@@ -43,9 +48,37 @@ const streamsRoot = path.resolve(rootDir, config.paths.streamsRoot);
 const recordingsRoot = path.resolve(rootDir, config.paths.recordingsRoot);
 const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
 
-const apiToken = (process.env.CHICKENCAMS_API_TOKEN ?? config.server.apiToken ?? "").trim() || null;
+function normalizeString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function generatePairingCode() {
+  return `${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
+function generateApiToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+let apiToken = normalizeString(process.env.CHICKENCAMS_API_TOKEN || "") || normalizeString(config.server.apiToken) || null;
+let pairingCode = normalizeString(config.server.pairingCode) || null;
+
 if (!apiToken) {
-  console.warn("CHICKENCAMS_API_TOKEN is not set. /api/config and /api/download are disabled.");
+  apiToken = generateApiToken();
+  if (!pairingCode) {
+    pairingCode = generatePairingCode();
+  }
+  config = {
+    ...config,
+    server: {
+      ...config.server,
+      apiToken,
+      pairingCode
+    }
+  };
+  persistRuntimeConfig();
+  console.warn("CHICKENCAMS_API_TOKEN was missing. Generated a token and pairing code.");
+  console.warn(`Pairing code: ${pairingCode}`);
 }
 
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
@@ -94,6 +127,19 @@ function sanitizeCameraId(cameraId) {
 
 app.get("/config", (req, res) => {
   res.sendFile(path.join(publicDir, "config.html"));
+});
+
+app.post("/api/pair", (req, res) => {
+  if (!pairingCode || !apiToken) {
+    res.status(404).json({ error: "Pairing unavailable." });
+    return;
+  }
+  const code = normalizeString(req.body?.code);
+  if (!code || code !== pairingCode) {
+    res.status(401).json({ error: "Invalid pairing code." });
+    return;
+  }
+  res.json({ token: apiToken });
 });
 
 app.get("/api/config", requireApiToken, (req, res) => {
@@ -348,7 +394,30 @@ async function stitchSegments(cameraId, segments) {
   });
 }
 
+function startServer(port, host, attemptsRemaining = 5) {
+  const server = app.listen(port, host, () => {
+    console.log(`Chickencams server running on http://${host}:${port}`);
+  });
+
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE" && attemptsRemaining > 0) {
+      const nextPort = port + 1;
+      console.warn(`Port ${port} is in use. Trying ${nextPort}...`);
+      config = {
+        ...config,
+        server: {
+          ...config.server,
+          port: nextPort
+        }
+      };
+      persistRuntimeConfig();
+      startServer(nextPort, host, attemptsRemaining - 1);
+      return;
+    }
+    console.error("Failed to start server:", error.message);
+    process.exitCode = 1;
+  });
+}
+
 const { port, host } = config.server;
-app.listen(port, host, () => {
-  console.log(`Chickencams server running on http://${host}:${port}`);
-});
+startServer(port, host);

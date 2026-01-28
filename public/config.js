@@ -4,10 +4,31 @@ const status = document.getElementById("configStatus");
 let config = null;
 const apiTokenStorageKey = "chickencamsApiToken";
 
-function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
+async function requestPairingToken() {
+  const pairingCode = window.prompt("Enter the 6-digit pairing code shown in the server logs:");
+  if (!pairingCode) {
+    return null;
+  }
+  try {
+    const response = await fetch("/api/pair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: pairingCode })
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return typeof data.token === "string" ? data.token : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
   let token = localStorage.getItem(apiTokenStorageKey);
   if (!token && promptIfMissing) {
-    token = window.prompt("Enter the Chickencams API token to continue:");
+    token = await requestPairingToken();
     if (token) {
       localStorage.setItem(apiTokenStorageKey, token);
     }
@@ -48,9 +69,9 @@ function createCameraRow(camera) {
 }
 
 async function loadConfig() {
-  const apiToken = getApiToken({ promptIfMissing: true });
+  const apiToken = await getApiToken({ promptIfMissing: true });
   if (!apiToken) {
-    status.textContent = "Missing API token.";
+    status.textContent = "Missing pairing code.";
     return;
   }
   const response = await fetch("/api/config", {
@@ -75,9 +96,9 @@ async function saveConfig() {
     status.textContent = "Config not loaded.";
     return;
   }
-  const apiToken = getApiToken({ promptIfMissing: true });
+  const apiToken = await getApiToken({ promptIfMissing: true });
   if (!apiToken) {
-    status.textContent = "Missing API token.";
+    status.textContent = "Missing pairing code.";
     return;
   }
   const cameras = config.cameras.map((camera) => {
