@@ -275,11 +275,39 @@ app.post("/api/download", requireApiToken, async (req, res) => {
   const startSeconds = Math.floor(start / 1000);
   const endSeconds = Math.floor(end / 1000);
 
+  const selectedQuality = ["high", "med", "low"].includes(quality) ? quality : "high";
+  const stitchedFiles = [];
+
+  for (const cameraId of validCameras) {
+    const segments = findSegmentsForRange(
+      recordingsRoot,
+      cameraId,
+      startSeconds,
+      endSeconds,
+      config.hls.recordingSegmentSeconds,
+      recordingSafetyBufferSeconds
+    );
+    if (segments.length === 0) {
+      continue;
+    }
+
+    const stitchedPath = await stitchSegments(cameraId, segments, selectedQuality);
+    if (stitchedPath) {
+      const filename = `${cameraId}-${start}-${end}.mp4`;
+      stitchedFiles.push({ path: stitchedPath, name: filename });
+    }
+  }
+
+  if (stitchedFiles.length === 0) {
+    res.status(404).json({ error: "No recordings found for the selected time range." });
+    return;
+  }
+
   res.setHeader("Content-Disposition", "attachment; filename=chickencams-download.zip");
   res.setHeader("Content-Type", "application/zip");
 
   const archive = archiver("zip", { zlib: { level: 9 } });
-  const tempFiles = new Set();
+  const tempFiles = new Set(stitchedFiles.map((file) => file.path));
   const cleanupTemp = () => {
     tempFiles.forEach((file) => {
       if (fs.existsSync(file)) {
@@ -302,28 +330,9 @@ app.post("/api/download", requireApiToken, async (req, res) => {
 
   archive.pipe(res);
 
-  const selectedQuality = ["high", "med", "low"].includes(quality) ? quality : "high";
-
-  for (const cameraId of validCameras) {
-    const segments = findSegmentsForRange(
-      recordingsRoot,
-      cameraId,
-      startSeconds,
-      endSeconds,
-      config.hls.recordingSegmentSeconds,
-      recordingSafetyBufferSeconds
-    );
-    if (segments.length === 0) {
-      continue;
-    }
-
-    const stitchedPath = await stitchSegments(cameraId, segments, selectedQuality);
-    if (stitchedPath) {
-      const filename = `${cameraId}-${start}-${end}.mp4`;
-      archive.file(stitchedPath, { name: filename });
-      tempFiles.add(stitchedPath);
-    }
-  }
+  stitchedFiles.forEach((file) => {
+    archive.file(file.path, { name: file.name });
+  });
 
   await archive.finalize();
 });
