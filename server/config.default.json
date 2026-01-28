@@ -2,12 +2,16 @@
   "server": {
     "port": 3000,
     "host": "0.0.0.0",
-    "apiToken": ""
+    "apiToken": "",
+    "pairingCode": ""
   },
   "paths": {
     "streamsRoot": "./streams",
     "recordingsRoot": "./recordings",
     "activityRoot": "./activity"
+  },
+  "storage": {
+    "maxBackupGb": 50
   },
   "cameras": [
     {

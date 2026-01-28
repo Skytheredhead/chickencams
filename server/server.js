@@ -6,6 +6,7 @@ import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
 import { spawn } from "child_process";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,11 +27,16 @@ function loadConfig() {
     server: { ...base.server, ...override.server },
     paths: { ...base.paths, ...override.paths },
     hls: { ...base.hls, ...override.hls },
+    storage: { ...base.storage, ...override.storage },
     cameras: Array.isArray(override.cameras) ? override.cameras : base.cameras
   };
 }
 
 let config = loadConfig();
+
+function persistRuntimeConfig() {
+  fs.writeFileSync(runtimeConfigPath, JSON.stringify(config, null, 2));
+}
 
 const app = express();
 app.use(morgan("dev"));
@@ -43,14 +49,45 @@ const streamsRoot = path.resolve(rootDir, config.paths.streamsRoot);
 const recordingsRoot = path.resolve(rootDir, config.paths.recordingsRoot);
 const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
 
-const apiToken = (process.env.CHICKENCAMS_API_TOKEN ?? config.server.apiToken ?? "").trim() || null;
+function normalizeString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function generatePairingCode() {
+  return `${Math.floor(100000 + Math.random() * 900000)}`;
+}
+
+function generateApiToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+let apiToken = normalizeString(process.env.CHICKENCAMS_API_TOKEN || "") || normalizeString(config.server.apiToken) || null;
+let pairingCode = normalizeString(config.server.pairingCode) || null;
+
 if (!apiToken) {
-  console.warn("CHICKENCAMS_API_TOKEN is not set. /api/config and /api/download are disabled.");
+  apiToken = generateApiToken();
+  if (!pairingCode) {
+    pairingCode = generatePairingCode();
+  }
+  config = {
+    ...config,
+    server: {
+      ...config.server,
+      apiToken,
+      pairingCode
+    }
+  };
+  persistRuntimeConfig();
+  console.warn("CHICKENCAMS_API_TOKEN was missing. Generated a token and pairing code.");
+  console.warn(`Pairing code: ${pairingCode}`);
 }
 
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
   ? config.hls.recordingSafetyBufferSeconds
   : 5;
+const maxBackupBytes = Number.isFinite(config.storage?.maxBackupGb)
+  ? config.storage.maxBackupGb * 1024 * 1024 * 1024
+  : null;
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -63,6 +100,59 @@ function ensureStoragePaths() {
 }
 
 ensureStoragePaths();
+
+function listBackupFiles(root) {
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+  const files = [];
+  const cameraDirs = fs.readdirSync(root);
+  for (const cameraDir of cameraDirs) {
+    const fullDir = path.join(root, cameraDir);
+    if (!fs.statSync(fullDir).isDirectory()) {
+      continue;
+    }
+    for (const file of fs.readdirSync(fullDir)) {
+      if (!file.endsWith(".mp4")) {
+        continue;
+      }
+      const fullPath = path.join(fullDir, file);
+      try {
+        const stats = fs.statSync(fullPath);
+        files.push({ path: fullPath, size: stats.size, mtimeMs: stats.mtimeMs });
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+  return files;
+}
+
+function enforceBackupStorageCap() {
+  if (!maxBackupBytes) {
+    return;
+  }
+  const files = listBackupFiles(recordingsRoot);
+  let totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize <= maxBackupBytes) {
+    return;
+  }
+  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  for (const file of files) {
+    if (totalSize <= maxBackupBytes) {
+      break;
+    }
+    try {
+      fs.unlinkSync(file.path);
+      totalSize -= file.size;
+    } catch (error) {
+      continue;
+    }
+  }
+}
+
+enforceBackupStorageCap();
+setInterval(enforceBackupStorageCap, 10 * 60 * 1000);
 
 function requireApiToken(req, res, next) {
   if (!apiToken) {
@@ -94,6 +184,19 @@ function sanitizeCameraId(cameraId) {
 
 app.get("/config", (req, res) => {
   res.sendFile(path.join(publicDir, "config.html"));
+});
+
+app.post("/api/pair", (req, res) => {
+  if (!pairingCode || !apiToken) {
+    res.status(404).json({ error: "Pairing unavailable." });
+    return;
+  }
+  const code = normalizeString(req.body?.code);
+  if (!code || code !== pairingCode) {
+    res.status(401).json({ error: "Invalid pairing code." });
+    return;
+  }
+  res.json({ token: apiToken });
 });
 
 app.get("/api/config", requireApiToken, (req, res) => {
@@ -150,7 +253,7 @@ app.get("/api/rewind/:cameraId", (req, res) => {
 });
 
 app.post("/api/download", requireApiToken, async (req, res) => {
-  const { cameras, startTimestamp, endTimestamp } = req.body ?? {};
+  const { cameras, startTimestamp, endTimestamp, quality } = req.body ?? {};
   if (!Array.isArray(cameras) || cameras.length === 0) {
     res.status(400).json({ error: "Select at least one camera." });
     return;
@@ -172,11 +275,39 @@ app.post("/api/download", requireApiToken, async (req, res) => {
   const startSeconds = Math.floor(start / 1000);
   const endSeconds = Math.floor(end / 1000);
 
+  const selectedQuality = ["high", "med", "low"].includes(quality) ? quality : "high";
+  const stitchedFiles = [];
+
+  for (const cameraId of validCameras) {
+    const segments = findSegmentsForRange(
+      recordingsRoot,
+      cameraId,
+      startSeconds,
+      endSeconds,
+      config.hls.recordingSegmentSeconds,
+      recordingSafetyBufferSeconds
+    );
+    if (segments.length === 0) {
+      continue;
+    }
+
+    const stitchedPath = await stitchSegments(cameraId, segments, selectedQuality);
+    if (stitchedPath) {
+      const filename = `${cameraId}-${start}-${end}.mp4`;
+      stitchedFiles.push({ path: stitchedPath, name: filename });
+    }
+  }
+
+  if (stitchedFiles.length === 0) {
+    res.status(404).json({ error: "No recordings found for the selected time range." });
+    return;
+  }
+
   res.setHeader("Content-Disposition", "attachment; filename=chickencams-download.zip");
   res.setHeader("Content-Type", "application/zip");
 
   const archive = archiver("zip", { zlib: { level: 9 } });
-  const tempFiles = new Set();
+  const tempFiles = new Set(stitchedFiles.map((file) => file.path));
   const cleanupTemp = () => {
     tempFiles.forEach((file) => {
       if (fs.existsSync(file)) {
@@ -199,26 +330,9 @@ app.post("/api/download", requireApiToken, async (req, res) => {
 
   archive.pipe(res);
 
-  for (const cameraId of validCameras) {
-    const segments = findSegmentsForRange(
-      recordingsRoot,
-      cameraId,
-      startSeconds,
-      endSeconds,
-      config.hls.recordingSegmentSeconds,
-      recordingSafetyBufferSeconds
-    );
-    if (segments.length === 0) {
-      continue;
-    }
-
-    const stitchedPath = await stitchSegments(cameraId, segments);
-    if (stitchedPath) {
-      const filename = `${cameraId}-${start}-${end}.mp4`;
-      archive.file(stitchedPath, { name: filename });
-      tempFiles.add(stitchedPath);
-    }
-  }
+  stitchedFiles.forEach((file) => {
+    archive.file(file.path, { name: file.name });
+  });
 
   await archive.finalize();
 });
@@ -303,7 +417,30 @@ function findSegmentsForRange(root, cameraId, start, end, segmentDurationSeconds
     .map((entry) => path.join(cameraDir, entry.file));
 }
 
-async function stitchSegments(cameraId, segments) {
+function getTranscodeSettings(quality) {
+  if (quality === "med") {
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "96k"];
+  }
+  if (quality === "low") {
+    return [
+      "-vf",
+      "scale=-2:480",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "30",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "96k"
+    ];
+  }
+  return ["-c", "copy"];
+}
+
+async function stitchSegments(cameraId, segments, quality = "high") {
   const tmpDir = path.join(rootDir, ".tmp");
   if (!fs.existsSync(tmpDir)) {
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -323,8 +460,7 @@ async function stitchSegments(cameraId, segments) {
       "0",
       "-i",
       listFile,
-      "-c",
-      "copy",
+      ...getTranscodeSettings(quality),
       outputFile
     ]);
 
@@ -348,7 +484,30 @@ async function stitchSegments(cameraId, segments) {
   });
 }
 
+function startServer(port, host, attemptsRemaining = 5) {
+  const server = app.listen(port, host, () => {
+    console.log(`Chickencams server running on http://${host}:${port}`);
+  });
+
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE" && attemptsRemaining > 0) {
+      const nextPort = port + 1;
+      console.warn(`Port ${port} is in use. Trying ${nextPort}...`);
+      config = {
+        ...config,
+        server: {
+          ...config.server,
+          port: nextPort
+        }
+      };
+      persistRuntimeConfig();
+      startServer(nextPort, host, attemptsRemaining - 1);
+      return;
+    }
+    console.error("Failed to start server:", error.message);
+    process.exitCode = 1;
+  });
+}
+
 const { port, host } = config.server;
-app.listen(port, host, () => {
-  console.log(`Chickencams server running on http://${host}:${port}`);
-});
+startServer(port, host);
