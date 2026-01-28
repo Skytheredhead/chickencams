@@ -1,7 +1,22 @@
 const configList = document.getElementById("configList");
 const saveButton = document.getElementById("saveConfig");
 const status = document.getElementById("configStatus");
+const aggregatorHostInput = document.getElementById("aggregatorHost");
 let config = null;
+
+function parseSrtSource(source) {
+  if (typeof source !== "string") {
+    return null;
+  }
+  const match = source.match(/^srt:\\/\\/([^:/?]+)(?::(\\d+))?/i);
+  if (!match) {
+    return null;
+  }
+  return {
+    host: match[1] ?? "",
+    port: match[2] ? Number.parseInt(match[2], 10) : null
+  };
+}
 function createCameraRow(camera) {
   const row = document.createElement("div");
   row.className = "activity-item";
@@ -37,12 +52,14 @@ function createCameraRow(camera) {
   const sourceField = document.createElement("div");
   sourceField.className = "field";
   const sourceLabel = document.createElement("label");
-  sourceLabel.textContent = "Source URL";
+  sourceLabel.textContent = "Port";
   const source = document.createElement("input");
-  source.type = "text";
-  source.value = camera.source;
+  source.type = "number";
+  source.min = "1";
+  source.max = "65535";
+  source.value = camera.port ?? "";
   source.dataset.camera = camera.id;
-  source.dataset.field = "source";
+  source.dataset.field = "port";
   sourceField.append(sourceLabel, source);
 
   meta.append(title, nameField, enabledLabel, sourceField);
@@ -57,9 +74,16 @@ async function loadConfig() {
     return;
   }
   config = await response.json();
+  const fallbackHost = config.cameras
+    ?.map((camera) => parseSrtSource(camera.source)?.host)
+    ?.find((host) => host);
+  if (aggregatorHostInput) {
+    aggregatorHostInput.value = config.ingestHost || fallbackHost || "";
+  }
   configList.innerHTML = "";
   config.cameras.forEach((camera) => {
-    configList.appendChild(createCameraRow(camera));
+    const parsed = parseSrtSource(camera.source);
+    configList.appendChild(createCameraRow({ ...camera, port: parsed?.port ?? "" }));
   });
 }
 
@@ -70,13 +94,13 @@ async function saveConfig() {
   }
   const cameras = config.cameras.map((camera) => {
     const enabled = configList.querySelector(`input[type=checkbox][data-camera="${camera.id}"]`);
-    const source = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="source"]`);
+    const port = configList.querySelector(`input[type=number][data-camera="${camera.id}"][data-field="port"]`);
     const nameInput = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="name"]`);
     return {
       ...camera,
       name: nameInput?.value ?? camera.name,
       enabled: enabled?.checked ?? camera.enabled,
-      source: source?.value ?? camera.source
+      port: port?.value ?? ""
     };
   });
 
@@ -85,7 +109,11 @@ async function saveConfig() {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ ...config, cameras })
+    body: JSON.stringify({
+      ...config,
+      ingestHost: aggregatorHostInput?.value ?? config.ingestHost,
+      cameras
+    })
   });
 
   status.textContent = response.ok ? "Saved." : "Save failed.";

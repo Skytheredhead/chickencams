@@ -41,7 +41,8 @@ The launcher runs `launch-chickencams.sh`, opens `http://localhost:3000/`, and s
 
 - The server loads defaults from `server/config.default.json` and applies overrides from `server/config.json` if present.
 - Camera definitions live in `server/camera-registry.json` (edit this file to add/remove cameras).
-The config and download endpoints are available without authentication on a trusted LAN.
+- The config and download endpoints are available without authentication on a trusted LAN.
+- Use `/config` to set the aggregator host once and enter camera ports instead of full ingest URLs.
 
 ## Project layout
 

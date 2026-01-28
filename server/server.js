@@ -28,6 +28,7 @@ function loadConfig() {
     hls: { ...base.hls, ...override.hls },
     storage: { ...base.storage, ...override.storage },
     health: { ...base.health, ...override.health },
+    ingestHost: normalizeString(override.ingestHost) || normalizeString(base.ingestHost) || "0.0.0.0",
     cameras: Array.isArray(override.cameras) ? override.cameras : base.cameras
   };
 }
@@ -76,6 +77,14 @@ const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function buildSrtSource(ingestHost, port, fallbackSource) {
+  if (!Number.isFinite(port)) {
+    return normalizeString(fallbackSource);
+  }
+  const host = normalizeString(ingestHost) || "0.0.0.0";
+  return `srt://${host}:${port}?mode=listener`;
 }
 
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
@@ -180,13 +189,19 @@ app.post("/api/config", requireApiToken, (req, res) => {
     res.status(400).json({ error: "Invalid camera payload." });
     return;
   }
+  const ingestHost = normalizeString(payload.ingestHost) || config.ingestHost || "0.0.0.0";
   const updated = {
     ...config,
+    ingestHost,
     cameras: cameras.map((camera, index) => ({
       id: typeof camera.id === "string" ? camera.id : config.cameras[index]?.id ?? `cam${index + 1}`,
       name: typeof camera.name === "string" ? camera.name : config.cameras[index]?.name ?? `Cam ${index + 1}`,
       enabled: Boolean(camera.enabled),
-      source: typeof camera.source === "string" ? camera.source : config.cameras[index]?.source ?? ""
+      source: buildSrtSource(
+        ingestHost,
+        Number.parseInt(camera.port, 10),
+        typeof camera.source === "string" ? camera.source : config.cameras[index]?.source ?? ""
+      )
     }))
   };
   const { cameras: _cameras, ...runtimeConfig } = updated;

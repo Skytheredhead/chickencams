@@ -9,6 +9,7 @@
     "activityRoot": "./activity",
     "cameraRegistryPath": "./camera-registry.json"
   },
+  "ingestHost": "0.0.0.0",
   "health": {
     "onlineSeconds": 5,
     "degradedSeconds": 15
