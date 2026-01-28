@@ -12,7 +12,7 @@ if ! command -v nc >/dev/null 2>&1; then
 fi
 
 echo "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
-if ! nc -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; then
+if ! nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; then
   echo "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}." >&2
   echo "Hint: Ensure the server is running and listening on that port before starting capture." >&2
   exit 1
