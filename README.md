@@ -40,6 +40,7 @@ The launcher runs `launch-chickencams.sh`, opens `http://localhost:3000/`, and s
 ## Configuration and security
 
 - The server loads defaults from `server/config.default.json` and applies overrides from `server/config.json` if present.
+- Camera definitions live in `server/camera-registry.json` (edit this file to add/remove cameras).
 - Set an API token to enable the config and download endpoints:
 
 ```bash

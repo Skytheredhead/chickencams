@@ -28,14 +28,40 @@ function loadConfig() {
     paths: { ...base.paths, ...override.paths },
     hls: { ...base.hls, ...override.hls },
     storage: { ...base.storage, ...override.storage },
+    health: { ...base.health, ...override.health },
     cameras: Array.isArray(override.cameras) ? override.cameras : base.cameras
   };
 }
 
 let config = loadConfig();
+const cameraRegistryPath = path.resolve(rootDir, config.paths?.cameraRegistryPath || "camera-registry.json");
+
+function loadCameraRegistry(baseCameras) {
+  if (!fs.existsSync(cameraRegistryPath)) {
+    return baseCameras;
+  }
+  try {
+    const registry = readJson(cameraRegistryPath);
+    if (Array.isArray(registry)) {
+      return registry;
+    }
+    if (Array.isArray(registry.cameras)) {
+      return registry.cameras;
+    }
+  } catch (error) {
+    console.warn(`Failed to read camera registry at ${cameraRegistryPath}:`, error.message);
+  }
+  return baseCameras;
+}
+
+config = {
+  ...config,
+  cameras: loadCameraRegistry(config.cameras)
+};
 
 function persistRuntimeConfig() {
-  fs.writeFileSync(runtimeConfigPath, JSON.stringify(config, null, 2));
+  const { cameras: _cameras, ...runtimeConfig } = config;
+  fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
 }
 
 const app = express();
@@ -219,13 +245,20 @@ app.post("/api/config", requireApiToken, (req, res) => {
       source: typeof camera.source === "string" ? camera.source : config.cameras[index]?.source ?? ""
     }))
   };
-  fs.writeFileSync(runtimeConfigPath, JSON.stringify(updated, null, 2));
+  const { cameras: _cameras, ...runtimeConfig } = updated;
+  fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
+  fs.writeFileSync(cameraRegistryPath, JSON.stringify({ cameras: updated.cameras }, null, 2));
   config = updated;
   res.json({ status: "ok" });
 });
 
 app.get("/api/cameras", (req, res) => {
-  res.json({ cameras: config.cameras });
+  res.json({
+    cameras: config.cameras.map((camera) => ({
+      ...camera,
+      health: getCameraHealth(camera.id)
+    }))
+  });
 });
 
 app.get("/api/activity", (req, res) => {
@@ -383,6 +416,50 @@ function readActivityItems(root) {
     }
   }
   return items.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function getLatestSegmentMtimeMs(cameraId) {
+  const cameraDir = path.join(streamsRoot, cameraId);
+  if (!fs.existsSync(cameraDir)) {
+    return null;
+  }
+  const variants = fs
+    .readdirSync(cameraDir)
+    .filter((entry) => fs.statSync(path.join(cameraDir, entry)).isDirectory());
+  let latest = null;
+  variants.forEach((variant) => {
+    const variantDir = path.join(cameraDir, variant);
+    if (!fs.existsSync(variantDir)) {
+      return;
+    }
+    const entries = fs.readdirSync(variantDir).filter((file) => file.endsWith(".ts"));
+    entries.forEach((file) => {
+      try {
+        const stats = fs.statSync(path.join(variantDir, file));
+        latest = latest == null ? stats.mtimeMs : Math.max(latest, stats.mtimeMs);
+      } catch (error) {
+        return;
+      }
+    });
+  });
+  return latest;
+}
+
+function getCameraHealth(cameraId) {
+  const onlineSeconds = Number.isFinite(config.health?.onlineSeconds) ? config.health.onlineSeconds : 5;
+  const degradedSeconds = Number.isFinite(config.health?.degradedSeconds) ? config.health.degradedSeconds : 15;
+  const lastSegmentMs = getLatestSegmentMtimeMs(cameraId);
+  if (!lastSegmentMs) {
+    return { status: "OFFLINE", lastSegmentMs: null };
+  }
+  const ageSeconds = (Date.now() - lastSegmentMs) / 1000;
+  if (ageSeconds <= onlineSeconds) {
+    return { status: "ONLINE", lastSegmentMs };
+  }
+  if (ageSeconds <= degradedSeconds) {
+    return { status: "DEGRADED", lastSegmentMs };
+  }
+  return { status: "OFFLINE", lastSegmentMs };
 }
 
 function findSegmentsForRange(root, cameraId, start, end, segmentDurationSeconds, safetyBufferSeconds) {

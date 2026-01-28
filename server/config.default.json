@@ -8,7 +8,12 @@
   "paths": {
     "streamsRoot": "./streams",
     "recordingsRoot": "./recordings",
-    "activityRoot": "./activity"
+    "activityRoot": "./activity",
+    "cameraRegistryPath": "./camera-registry.json"
+  },
+  "health": {
+    "onlineSeconds": 5,
+    "degradedSeconds": 15
   },
   "storage": {
     "maxBackupGb": 50

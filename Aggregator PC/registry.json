@@ -1,0 +1,48 @@
+{
+  "defaults": {
+    "serverHost": "chickens.local",
+    "serverPortBase": 9001,
+    "restartLimit": 5,
+    "restartWindowSeconds": 120,
+    "freezeTimeoutSeconds": 8,
+    "cpuLimitPercent": 160,
+    "memoryLimitMb": 600
+  },
+  "cameras": [
+    {
+      "id": "cam1",
+      "name": "Cam 1",
+      "enabled": true,
+      "devicePath": "/dev/v4l/by-id/usb-camera-cam1",
+      "serverPort": 9001
+    },
+    {
+      "id": "cam2",
+      "name": "Cam 2",
+      "enabled": true,
+      "devicePath": "/dev/v4l/by-id/usb-camera-cam2",
+      "serverPort": 9002
+    },
+    {
+      "id": "cam3",
+      "name": "Cam 3",
+      "enabled": true,
+      "devicePath": "/dev/v4l/by-id/usb-camera-cam3",
+      "serverPort": 9003
+    },
+    {
+      "id": "cam4",
+      "name": "Cam 4",
+      "enabled": true,
+      "devicePath": "/dev/v4l/by-id/usb-camera-cam4",
+      "serverPort": 9004
+    },
+    {
+      "id": "cam5",
+      "name": "Cam 5",
+      "enabled": true,
+      "devicePath": "/dev/v4l/by-id/usb-camera-cam5",
+      "serverPort": 9005
+    }
+  ]
+}

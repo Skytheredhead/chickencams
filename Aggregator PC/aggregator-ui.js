@@ -10,23 +10,54 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number.parseInt(process.env.AGGREGATOR_UI_PORT ?? "3010", 10);
-const defaultServer = process.env.AGGREGATOR_SERVER_HOST ?? "chickens.local";
-const defaultPort = Number.parseInt(process.env.AGGREGATOR_SERVER_PORT ?? "9001", 10);
-const cameraIds = ["cam1", "cam2", "cam3", "cam4", "cam5"];
+const registryPath = path.join(__dirname, "registry.json");
+const defaultRegistry = {
+  defaults: {
+    serverHost: process.env.AGGREGATOR_SERVER_HOST ?? "chickens.local",
+    serverPortBase: Number.parseInt(process.env.AGGREGATOR_SERVER_PORT ?? "9001", 10),
+  },
+  cameras: [
+    { id: "cam1", name: "Cam 1", enabled: true },
+    { id: "cam2", name: "Cam 2", enabled: true },
+    { id: "cam3", name: "Cam 3", enabled: true },
+    { id: "cam4", name: "Cam 4", enabled: true },
+    { id: "cam5", name: "Cam 5", enabled: true },
+  ],
+};
 const running = new Map();
 
 app.use(express.urlencoded({ extended: false }));
 
-const getVideoDevices = () => {
+const loadRegistry = () => {
   try {
-    return fs
-      .readdirSync("/dev")
-      .filter((entry) => entry.startsWith("video"))
-      .map((entry) => `/dev/${entry}`)
-      .sort();
-  } catch {
-    return [];
+    if (!fs.existsSync(registryPath)) {
+      return defaultRegistry;
+    }
+    const registry = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
+    return {
+      defaults: { ...defaultRegistry.defaults, ...(registry.defaults ?? {}) },
+      cameras: Array.isArray(registry.cameras) && registry.cameras.length ? registry.cameras : defaultRegistry.cameras,
+    };
+  } catch (error) {
+    console.warn("Failed to read registry.json, using defaults.", error);
+    return defaultRegistry;
   }
+};
+
+const getVideoDevices = () => {
+  const devices = new Set();
+  const candidates = ["/dev/v4l/by-id", "/dev/v4l/by-path"];
+  candidates.forEach((dir) => {
+    try {
+      fs.readdirSync(dir).forEach((entry) => {
+        const fullPath = path.join(dir, entry);
+        devices.add(fullPath);
+      });
+    } catch {
+      return;
+    }
+  });
+  return Array.from(devices).sort();
 };
 
 const getLanAddresses = () => {
@@ -37,19 +68,23 @@ const getLanAddresses = () => {
     .map((entry) => entry.address);
 };
 
-const getDefaultPort = (cameraId) => {
-  const index = cameraIds.indexOf(cameraId);
+const getDefaultPort = (cameraList, cameraId, basePort) => {
+  const index = cameraList.findIndex((camera) => camera.id === cameraId);
   if (index === -1) {
-    return defaultPort;
+    return basePort;
   }
-  return defaultPort + index;
+  return basePort + index;
 };
 
 const renderPage = (message = "") => {
+  const registry = loadRegistry();
+  const cameraList = registry.cameras;
   const devices = getVideoDevices();
   const sessions = Array.from(running.values());
   const addresses = getLanAddresses();
   const addressList = addresses.length ? addresses.join(", ") : "Unavailable";
+  const defaultServer = registry.defaults.serverHost;
+  const defaultPort = registry.defaults.serverPortBase;
 
   return `<!doctype html>
 <html lang="en">
@@ -165,21 +200,24 @@ const renderPage = (message = "") => {
               </tr>
             </thead>
             <tbody>
-              ${cameraIds
+              ${cameraList
                 .map(
-                  (id) => `
+                  (camera) => `
                     <tr>
-                      <td>${id}</td>
+                      <td>${camera.id}</td>
                       <td>
-                        <select name="device_${id}" id="device_${id}">
+                        <select name="device_${camera.id}" id="device_${camera.id}">
                           <option value="">N/A</option>
                           ${devices
-                            .map((device) => `<option value="${device}">${device}</option>`)
+                            .map(
+                              (device) =>
+                                `<option value="${device}" ${device === camera.devicePath ? "selected" : ""}>${device}</option>`
+                            )
                             .join("")}
                         </select>
                       </td>
                       <td>
-                        <input name="serverPort_${id}" id="serverPort_${id}" value="${getDefaultPort(id)}" />
+                        <input name="serverPort_${camera.id}" id="serverPort_${camera.id}" value="${camera.serverPort ?? getDefaultPort(cameraList, camera.id, defaultPort)}" />
                       </td>
                     </tr>
                   `
@@ -249,8 +287,11 @@ app.post("/start", (req, res) => {
 
   const capturePath = path.join(__dirname, "capture.sh");
   const started = [];
+  const registry = loadRegistry();
+  const cameraList = registry.cameras;
 
-  cameraIds.forEach((cameraId) => {
+  cameraList.forEach((camera) => {
+    const cameraId = camera.id;
     const device = req.body[`device_${cameraId}`];
     const serverPort = req.body[`serverPort_${cameraId}`];
 

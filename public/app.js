@@ -92,6 +92,11 @@ function buildCameraTile(camera) {
   title.className = "camera-title";
   title.textContent = camera.name;
 
+  const status = document.createElement("div");
+  status.className = "camera-status";
+  status.dataset.state = camera.health?.status ?? "OFFLINE";
+  status.textContent = getStatusLabel(camera.health?.status);
+
   const video = document.createElement("video");
   video.autoplay = true;
   video.playsInline = true;
@@ -112,8 +117,20 @@ function buildCameraTile(camera) {
     toggleCameraAudio(camera.id);
   });
 
-  tile.append(title, video, placeholder, speaker);
-  return { tile, video, placeholder };
+  tile.append(title, status, video, placeholder, speaker);
+  return { tile, video, placeholder, status };
+}
+
+function getStatusLabel(status) {
+  switch (status) {
+    case "ONLINE":
+      return "Online";
+    case "DEGRADED":
+      return "Degraded";
+    case "OFFLINE":
+    default:
+      return "Offline";
+  }
 }
 
 function getSpeakerIcon(isMuted) {
@@ -157,6 +174,20 @@ function toggleCameraAudio(cameraId) {
   applyAudioState();
 }
 
+function updateCameraStatus(placeholder, statusElement, health) {
+  const state = health?.status ?? "OFFLINE";
+  statusElement.dataset.state = state;
+  statusElement.textContent = getStatusLabel(state);
+  placeholder.classList.toggle("hidden", state === "ONLINE");
+  if (state === "OFFLINE") {
+    placeholder.textContent = "Live feed offline.";
+  } else if (state === "DEGRADED") {
+    placeholder.textContent = "Live feed degraded.";
+  } else {
+    placeholder.textContent = "Waiting for live feed…";
+  }
+}
+
 async function loadCameras() {
   try {
     const response = await fetch("/api/cameras");
@@ -179,9 +210,10 @@ async function loadCameras() {
   rewindCamera.innerHTML = "";
 
   cameras.filter((camera) => camera.enabled).forEach((camera) => {
-    const { tile, video, placeholder } = buildCameraTile(camera);
+    const { tile, video, placeholder, status } = buildCameraTile(camera);
     cameraGrid.appendChild(tile);
-    attachLiveStream(video, camera.id, placeholder);
+    updateCameraStatus(placeholder, status, camera.health);
+    attachLiveStream(video, camera.id, placeholder, status);
 
     const checkboxLabel = document.createElement("label");
     const checkbox = document.createElement("input");
@@ -202,7 +234,7 @@ async function loadCameras() {
   applyAudioState();
 }
 
-function attachLiveStream(video, cameraId, placeholder) {
+function attachLiveStream(video, cameraId, placeholder, statusElement) {
   const streamUrl = `/streams/${cameraId}/master.m3u8`;
   if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({
@@ -214,15 +246,27 @@ function attachLiveStream(video, cameraId, placeholder) {
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       placeholder?.classList.add("hidden");
+      if (statusElement) {
+        statusElement.dataset.state = "ONLINE";
+        statusElement.textContent = getStatusLabel("ONLINE");
+      }
     });
     hls.on(Hls.Events.ERROR, () => {
       placeholder?.classList.remove("hidden");
       placeholder.textContent = "Live feed unavailable.";
+      if (statusElement) {
+        statusElement.dataset.state = "DEGRADED";
+        statusElement.textContent = getStatusLabel("DEGRADED");
+      }
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = streamUrl;
     video.addEventListener("loadedmetadata", () => {
       placeholder?.classList.add("hidden");
+      if (statusElement) {
+        statusElement.dataset.state = "ONLINE";
+        statusElement.textContent = getStatusLabel("ONLINE");
+      }
     }, { once: true });
   }
 }
@@ -436,3 +480,26 @@ setupActivityObserver();
 setActiveSection("live");
 setDefaultDownloadTime();
 setDefaultRewindTime();
+
+setInterval(async () => {
+  try {
+    const response = await fetch("/api/cameras");
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    (data.cameras ?? []).forEach((camera) => {
+      const tile = cameraGrid.querySelector(`[data-camera="${camera.id}"]`);
+      if (!tile) {
+        return;
+      }
+      const placeholder = tile.querySelector(".video-placeholder");
+      const statusElement = tile.querySelector(".camera-status");
+      if (placeholder && statusElement) {
+        updateCameraStatus(placeholder, statusElement, camera.health);
+      }
+    });
+  } catch (error) {
+    return;
+  }
+}, 5000);
