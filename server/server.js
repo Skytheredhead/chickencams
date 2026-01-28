@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,6 +113,11 @@ function isSrtSource(source) {
   return typeof source === "string" && source.startsWith("srt://");
 }
 
+function hasFfmpeg() {
+  const result = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  return result.status === 0;
+}
+
 function spawnEncoder(scriptName, args, label) {
   const scriptPath = path.join(encoderRoot, scriptName);
   const child = spawn(scriptPath, args, { stdio: "inherit" });
@@ -130,6 +135,12 @@ function spawnEncoder(scriptName, args, label) {
 function startCameraEncoders() {
   if (!config.autoStartEncoders) {
     console.log("[encoders] Auto-start disabled.");
+    return;
+  }
+  if (!hasFfmpeg()) {
+    console.warn(
+      "[encoders] ffmpeg not found. Install ffmpeg or disable autoStartEncoders to suppress this warning."
+    );
     return;
   }
   for (const camera of config.cameras) {
