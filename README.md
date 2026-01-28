@@ -37,17 +37,11 @@ The launcher runs `launch-chickencams.sh`, opens `http://localhost:3000/`, and s
 - ffmpeg available on the host running the encoder scripts.
 - A shared storage location for HLS streams, recordings, and activity clips.
 
-## Configuration and security
+## Configuration
 
 - The server loads defaults from `server/config.default.json` and applies overrides from `server/config.json` if present.
 - Camera definitions live in `server/camera-registry.json` (edit this file to add/remove cameras).
-- Set an API token to enable the config and download endpoints:
-
-```bash
-export CHICKENCAMS_API_TOKEN="replace-with-a-long-secret"
-```
-
-The UI will prompt for the token when you open `/config` or request a download.
+The config and download endpoints are available without authentication on a trusted LAN.
 
 ## Project layout
 

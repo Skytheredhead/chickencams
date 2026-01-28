@@ -6,7 +6,6 @@ import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
 import { spawn } from "child_process";
-import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,35 +76,6 @@ const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function generatePairingCode() {
-  return `${Math.floor(100000 + Math.random() * 900000)}`;
-}
-
-function generateApiToken() {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-let apiToken = normalizeString(process.env.CHICKENCAMS_API_TOKEN || "") || normalizeString(config.server.apiToken) || null;
-let pairingCode = normalizeString(config.server.pairingCode) || null;
-
-if (!apiToken) {
-  apiToken = generateApiToken();
-  if (!pairingCode) {
-    pairingCode = generatePairingCode();
-  }
-  config = {
-    ...config,
-    server: {
-      ...config.server,
-      apiToken,
-      pairingCode
-    }
-  };
-  persistRuntimeConfig();
-  console.warn("CHICKENCAMS_API_TOKEN was missing. Generated a token and pairing code.");
-  console.warn(`Pairing code: ${pairingCode}`);
 }
 
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
@@ -181,19 +151,6 @@ enforceBackupStorageCap();
 setInterval(enforceBackupStorageCap, 10 * 60 * 1000);
 
 function requireApiToken(req, res, next) {
-  if (!apiToken) {
-    res.status(503).json({
-      error: "API token not configured. Set CHICKENCAMS_API_TOKEN or server.apiToken."
-    });
-    return;
-  }
-  const authHeader = req.get("authorization") ?? "";
-  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const headerToken = req.get("x-api-key") ?? bearer;
-  if (!headerToken || headerToken !== apiToken) {
-    res.status(401).json({ error: "Unauthorized." });
-    return;
-  }
   next();
 }
 
@@ -210,19 +167,6 @@ function sanitizeCameraId(cameraId) {
 
 app.get("/config", (req, res) => {
   res.sendFile(path.join(publicDir, "config.html"));
-});
-
-app.post("/api/pair", (req, res) => {
-  if (!pairingCode || !apiToken) {
-    res.status(404).json({ error: "Pairing unavailable." });
-    return;
-  }
-  const code = normalizeString(req.body?.code);
-  if (!code || code !== pairingCode) {
-    res.status(401).json({ error: "Invalid pairing code." });
-    return;
-  }
-  res.json({ token: apiToken });
 });
 
 app.get("/api/config", requireApiToken, (req, res) => {

@@ -28,39 +28,6 @@ let activityLoading = false;
 let activityDone = false;
 let rewindHls = null;
 
-const apiTokenStorageKey = "chickencamsApiToken";
-
-async function requestPairingToken() {
-  const pairingCode = window.prompt("Enter the 6-digit pairing code shown in the server logs:");
-  if (!pairingCode) {
-    return null;
-  }
-  try {
-    const response = await fetch("/api/pair", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: pairingCode })
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    return typeof data.token === "string" ? data.token : null;
-  } catch (error) {
-    return null;
-  }
-}
-
-async function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
-  let token = localStorage.getItem(apiTokenStorageKey);
-  if (!token && promptIfMissing) {
-    token = await requestPairingToken();
-    if (token) {
-      localStorage.setItem(apiTokenStorageKey, token);
-    }
-  }
-  return token;
-}
 
 function setActiveSection(tab) {
   Object.entries(sections).forEach(([key, section]) => {
@@ -339,17 +306,11 @@ async function requestDownloadForRange({ cameraIds, start, end, statusElement })
   }
 
   statusElement.textContent = "Preparing download…";
-  const apiToken = await getApiToken({ promptIfMissing: true });
-  if (!apiToken) {
-    statusElement.textContent = "Download cancelled (missing pairing code).";
-    return;
-  }
   try {
     const response = await fetch("/api/download", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiToken}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         cameras: cameraIds,
@@ -361,9 +322,6 @@ async function requestDownloadForRange({ cameraIds, start, end, statusElement })
 
     if (!response.ok) {
       const error = await response.json();
-      if (response.status === 401) {
-        localStorage.removeItem(apiTokenStorageKey);
-      }
       statusElement.textContent = error.error ?? "Download failed.";
       return;
     }

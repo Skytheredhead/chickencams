@@ -2,40 +2,6 @@ const configList = document.getElementById("configList");
 const saveButton = document.getElementById("saveConfig");
 const status = document.getElementById("configStatus");
 let config = null;
-const apiTokenStorageKey = "chickencamsApiToken";
-
-async function requestPairingToken() {
-  const pairingCode = window.prompt("Enter the 6-digit pairing code shown in the server logs:");
-  if (!pairingCode) {
-    return null;
-  }
-  try {
-    const response = await fetch("/api/pair", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: pairingCode })
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    return typeof data.token === "string" ? data.token : null;
-  } catch (error) {
-    return null;
-  }
-}
-
-async function getApiToken({ promptIfMissing } = { promptIfMissing: false }) {
-  let token = localStorage.getItem(apiTokenStorageKey);
-  if (!token && promptIfMissing) {
-    token = await requestPairingToken();
-    if (token) {
-      localStorage.setItem(apiTokenStorageKey, token);
-    }
-  }
-  return token;
-}
-
 function createCameraRow(camera) {
   const row = document.createElement("div");
   row.className = "activity-item";
@@ -85,18 +51,8 @@ function createCameraRow(camera) {
 }
 
 async function loadConfig() {
-  const apiToken = await getApiToken({ promptIfMissing: true });
-  if (!apiToken) {
-    status.textContent = "Missing pairing code.";
-    return;
-  }
-  const response = await fetch("/api/config", {
-    headers: { Authorization: `Bearer ${apiToken}` }
-  });
+  const response = await fetch("/api/config");
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem(apiTokenStorageKey);
-    }
     status.textContent = "Unable to load config.";
     return;
   }
@@ -110,11 +66,6 @@ async function loadConfig() {
 async function saveConfig() {
   if (!config) {
     status.textContent = "Config not loaded.";
-    return;
-  }
-  const apiToken = await getApiToken({ promptIfMissing: true });
-  if (!apiToken) {
-    status.textContent = "Missing pairing code.";
     return;
   }
   const cameras = config.cameras.map((camera) => {
@@ -132,15 +83,11 @@ async function saveConfig() {
   const response = await fetch("/api/config", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiToken}`
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({ ...config, cameras })
   });
 
-  if (response.status === 401) {
-    localStorage.removeItem(apiTokenStorageKey);
-  }
   status.textContent = response.ok ? "Saved." : "Save failed.";
 }
 

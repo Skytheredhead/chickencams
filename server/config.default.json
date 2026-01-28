@@ -1,9 +1,7 @@
 {
   "server": {
     "port": 3000,
-    "host": "0.0.0.0",
-    "apiToken": "",
-    "pairingCode": ""
+    "host": "0.0.0.0"
   },
   "paths": {
     "streamsRoot": "./streams",
