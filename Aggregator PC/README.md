@@ -8,6 +8,16 @@ This folder contains the ThinkPad-side scripts that capture USB webcams and push
 2. Map each `/dev/video*` device to a camera ID (cam1-cam5).
 3. Run the capture script for each camera.
 
+## Quick UI (LAN-accessible)
+
+Launch the Aggregator UI to pick from available `/dev/video*` devices and start/stop capture jobs:
+
+```bash
+node "Aggregator PC/aggregator-ui.js"
+```
+
+The UI listens on port `3010` by default, lists the aggregator's LAN IPs, and prints LAN URLs on startup (override with `AGGREGATOR_UI_PORT`).
+
 ## Capture command (SRT recommended)
 
 ```bash
