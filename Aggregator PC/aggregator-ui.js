@@ -44,6 +44,14 @@ const loadRegistry = () => {
   }
 };
 
+const saveRegistry = (registry) => {
+  try {
+    fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf-8");
+  } catch (error) {
+    console.warn("Failed to write registry.json.", error);
+  }
+};
+
 const getVideoDevices = () => {
   const devices = new Set();
   const candidates = ["/dev/v4l/by-id", "/dev/v4l/by-path"];
@@ -187,8 +195,15 @@ const renderPage = (message = "") => {
         <form method="post" action="/start">
           <div class="grid">
             <div>
-              <label for="serverHost">Server host</label>
-              <input name="serverHost" id="serverHost" value="${defaultServer}" required />
+              <label for="serverHost">Server IP or hostname</label>
+              <input
+                name="serverHost"
+                id="serverHost"
+                value="${defaultServer}"
+                placeholder="192.168.1.50"
+                required
+              />
+              <small class="empty">Tip: use the server's LAN IP if chickens.local doesn't resolve.</small>
             </div>
           </div>
           <table>
@@ -289,11 +304,14 @@ app.post("/start", (req, res) => {
   const started = [];
   const registry = loadRegistry();
   const cameraList = registry.cameras;
+  registry.defaults.serverHost = serverHost;
 
   cameraList.forEach((camera) => {
     const cameraId = camera.id;
     const device = req.body[`device_${cameraId}`];
     const serverPort = req.body[`serverPort_${cameraId}`];
+    camera.devicePath = device || "";
+    camera.serverPort = serverPort || "";
 
     if (!device) {
       return;
@@ -328,6 +346,8 @@ app.post("/start", (req, res) => {
 
     started.push(`${cameraId} (${device})`);
   });
+
+  saveRegistry(registry);
 
   if (!started.length) {
     res.redirect("/?message=No+cameras+selected");
