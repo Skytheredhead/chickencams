@@ -27,7 +27,7 @@ RECORDING_ARGS=()
 if [[ -n "${RECORDINGS_DIR}" ]]; then
   mkdir -p "${RECORDINGS_DIR}/${CAMERA_ID}"
   RECORDING_ARGS=(
-    -map "[v0]"
+    -map "[vrec]"
     -map 0:a?
     -c:v "${ENCODER}"
     -preset "${PRESET}"
@@ -59,7 +59,7 @@ ffmpeg \
   -flags low_delay \
   -strict experimental \
   -i "${SOURCE_URL}" \
-  -filter_complex "[0:v]${TIMESTAMP_FILTER}[v0];[v0]split=4[v1][v2][v3][v4]" \
+  -filter_complex "[0:v]${TIMESTAMP_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
   -map "[v1]" -map 0:a? -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:0 2000k -maxrate:v:0 2200k -bufsize:v:0 4000k -r:v:0 30 -g:v:0 30 -keyint_min:v:0 30 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
   -map "[v2]" -map 0:a? -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:1 1000k -maxrate:v:1 1100k -bufsize:v:1 2000k -r:v:1 20 -g:v:1 20 -keyint_min:v:1 20 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
   -map "[v3]" -map 0:a? -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:2 500k -maxrate:v:2 600k -bufsize:v:2 1200k -r:v:2 20 -g:v:2 20 -keyint_min:v:2 20 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \

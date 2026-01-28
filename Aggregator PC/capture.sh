@@ -6,16 +6,19 @@ DEVICE=${2:?"video device required (/dev/video0)"}
 SERVER_HOST=${3:?"server hostname required"}
 SERVER_PORT=${4:?"server port required"}
 
-LOG_DIR=${LOG_DIR:-"$(pwd)/Aggregator PC/logs"}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR=${LOG_DIR:-"${SCRIPT_DIR}/logs"}
 LOG_FILE=${LOG_FILE:-"${LOG_DIR}/${CAMERA_ID}.log"}
 MAX_FPS=${MAX_FPS:-30}
 
 mkdir -p "${LOG_DIR}"
-exec >>"${LOG_FILE}" 2>&1
+exec > >(tee -a "${LOG_FILE}") 2>&1
 
 log() {
   printf "[%s] %s\n" "$(date +"%Y-%m-%d %H:%M:%S")" "$*"
 }
+
+log "Logging to ${LOG_FILE}"
 
 if ! command -v nc >/dev/null 2>&1; then
   log "Error: nc (netcat) is required to preflight the server listener check."
