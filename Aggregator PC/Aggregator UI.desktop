@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Chickencams Aggregator UI
+Comment=Start the Aggregator UI and open the device picker
+Exec=sh -c '"$(dirname "%k")"/launch-aggregator-ui.sh'
+Terminal=true
+Categories=Utility;Video;

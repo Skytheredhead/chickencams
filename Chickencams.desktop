@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Chickencams Server
+Comment=Start the Chickencams server and open the UI
+Exec=sh -c '"$(dirname "%k")"/launch-chickencams.sh'
+Terminal=true
+Categories=Utility;Video;
