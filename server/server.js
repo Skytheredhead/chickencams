@@ -119,6 +119,11 @@ function hasFfmpeg() {
   return result.status === 0;
 }
 
+function hasCommand(command) {
+  const result = spawnSync(command, ["--version"], { stdio: "ignore" });
+  return result.status === 0;
+}
+
 function spawnEncoder(scriptName, args, label) {
   const scriptPath = path.join(encoderRoot, scriptName);
   const child = spawn(scriptPath, args, { stdio: "inherit" });
@@ -131,6 +136,49 @@ function spawnEncoder(scriptName, args, label) {
     encoderProcesses.delete(label);
     console.warn(`[encoders] ${label} failed to start: ${error.message}`);
   });
+}
+
+function listUdpPortOwners(port) {
+  if (!hasCommand("lsof")) {
+    return [];
+  }
+  const result = spawnSync("lsof", ["-nP", `-iUDP:${port}`], { encoding: "utf-8" });
+  if (result.status !== 0 || !result.stdout) {
+    return [];
+  }
+  const lines = result.stdout.split("\n").slice(1).filter(Boolean);
+  return lines
+    .map((line) => line.trim().split(/\s+/))
+    .filter((parts) => parts.length >= 2)
+    .map(([command, pid]) => ({ command, pid: Number.parseInt(pid, 10) }))
+    .filter((entry) => Number.isFinite(entry.pid));
+}
+
+async function releaseFfmpegPort(port) {
+  const owners = listUdpPortOwners(port).filter((entry) => entry.command === "ffmpeg");
+  if (owners.length === 0) {
+    return false;
+  }
+  for (const owner of owners) {
+    try {
+      process.kill(owner.pid, "SIGTERM");
+    } catch (error) {
+      continue;
+    }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const remaining = listUdpPortOwners(port).filter((entry) => entry.command === "ffmpeg");
+  if (remaining.length === 0) {
+    return true;
+  }
+  for (const owner of remaining) {
+    try {
+      process.kill(owner.pid, "SIGKILL");
+    } catch (error) {
+      continue;
+    }
+  }
+  return true;
 }
 
 function checkUdpPortAvailable(port, host) {
@@ -173,7 +221,13 @@ async function startCameraEncoders() {
     const ingestHost = match?.[1] ?? config.ingestHost ?? "0.0.0.0";
     const ingestPort = match ? Number.parseInt(match[2], 10) : null;
     if (Number.isFinite(ingestPort)) {
-      const available = await checkUdpPortAvailable(ingestPort, ingestHost);
+      let available = await checkUdpPortAvailable(ingestPort, ingestHost);
+      if (!available) {
+        const released = await releaseFfmpegPort(ingestPort);
+        if (released) {
+          available = await checkUdpPortAvailable(ingestPort, ingestHost);
+        }
+      }
       if (!available) {
         console.warn(
           `[encoders] ${camera.id} skipped because ${ingestHost}:${ingestPort} is already in use.`

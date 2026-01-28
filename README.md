@@ -61,7 +61,7 @@ The launcher runs `launch-chickencams.sh`, opens `http://localhost:3000/`, and s
 
 Live playback uses HLS with low-latency settings. The server is ready to accept USB or RTSP inputs, then transcode with NVENC and burn timestamps into the video frames.
 
-By default the server auto-starts the per-camera encoder and recorder jobs for enabled cameras at boot (requires `ffmpeg` on the server host). You can disable this by setting `autoStartEncoders` to `false` in `server/config.json` or `server/config.default.json`.
+By default the server auto-starts the per-camera encoder and recorder jobs for enabled cameras at boot (requires `ffmpeg` on the server host). If an SRT ingest port is already in use by an existing `ffmpeg` listener, the server will stop it and claim the port. You can disable auto-start by setting `autoStartEncoders` to `false` in `server/config.json` or `server/config.default.json`.
 
 Manual run (one per camera):
 
