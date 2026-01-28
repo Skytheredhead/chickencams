@@ -6,6 +6,7 @@ import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
 import { spawn, spawnSync } from "child_process";
+import dgram from "dgram";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -132,7 +133,26 @@ function spawnEncoder(scriptName, args, label) {
   });
 }
 
-function startCameraEncoders() {
+function checkUdpPortAvailable(port, host) {
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket("udp4");
+    const handleError = (error) => {
+      socket.close();
+      if (error && error.code === "EADDRINUSE") {
+        resolve(false);
+        return;
+      }
+      resolve(false);
+    };
+    socket.once("error", handleError);
+    socket.bind(port, host, () => {
+      socket.close();
+      resolve(true);
+    });
+  });
+}
+
+async function startCameraEncoders() {
   if (!config.autoStartEncoders) {
     console.log("[encoders] Auto-start disabled.");
     return;
@@ -149,6 +169,18 @@ function startCameraEncoders() {
     }
     const hlsLabel = `${camera.id}:hls`;
     const recordLabel = `${camera.id}:record`;
+    const match = camera.source.match(/^srt:\/\/([^:/]+):(\d+)/i);
+    const ingestHost = match?.[1] ?? config.ingestHost ?? "0.0.0.0";
+    const ingestPort = match ? Number.parseInt(match[2], 10) : null;
+    if (Number.isFinite(ingestPort)) {
+      const available = await checkUdpPortAvailable(ingestPort, ingestHost);
+      if (!available) {
+        console.warn(
+          `[encoders] ${camera.id} skipped because ${ingestHost}:${ingestPort} is already in use.`
+        );
+        continue;
+      }
+    }
     if (!encoderProcesses.has(hlsLabel)) {
       spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot], hlsLabel);
     }
