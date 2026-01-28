@@ -1,6 +1,5 @@
 const cameraGrid = document.getElementById("cameraGrid");
 const bottomTabs = document.querySelectorAll(".bottom-tab");
-const topTabs = document.querySelectorAll(".top-tab");
 const sections = {
   live: document.getElementById("live"),
   activity: document.getElementById("activity"),
@@ -13,15 +12,17 @@ const activityStatus = document.getElementById("activityStatus");
 const downloadCameras = document.getElementById("downloadCameras");
 const downloadButton = document.getElementById("downloadButton");
 const downloadStatus = document.getElementById("downloadStatus");
-const globalMuteButton = document.getElementById("globalMuteButton");
-const globalMuteLabel = document.getElementById("globalMuteLabel");
-const globalMuteIcon = document.getElementById("globalMuteIcon");
+const downloadQuality = document.getElementById("downloadQuality");
 const rewindCamera = document.getElementById("rewindCamera");
 const rewindTime = document.getElementById("rewindTime");
+const rewindWindow = document.getElementById("rewindWindow");
 const rewindPlayer = document.getElementById("rewindPlayer");
+const rewindDownloadButton = document.getElementById("rewindDownloadButton");
+const rewindDownloadStatus = document.getElementById("rewindDownloadStatus");
 
 let cameras = [];
 let activeAudioCamera = "cam1";
+let isLiveMuted = false;
 let activityCursor = 0;
 let activityLoading = false;
 let activityDone = false;
@@ -72,14 +73,13 @@ bottomTabs.forEach((button) => {
     bottomTabs.forEach((tab) => tab.classList.remove("active"));
     button.classList.add("active");
     setActiveSection(button.dataset.tab);
-  });
-});
-
-topTabs.forEach((button) => {
-  button.addEventListener("click", () => {
-    topTabs.forEach((tab) => tab.classList.remove("active"));
-    button.classList.add("active");
-    setActiveSection(button.dataset.tab);
+    if (button.dataset.tab === "download") {
+      setDefaultDownloadTime();
+    }
+    if (button.dataset.tab === "rewind") {
+      setDefaultRewindTime();
+      loadRewindStream();
+    }
   });
 });
 
@@ -105,13 +105,11 @@ function buildCameraTile(camera) {
   const speaker = document.createElement("button");
   speaker.className = "speaker-toggle";
   speaker.setAttribute("type", "button");
-  speaker.innerHTML = getSpeakerIcon(video.muted);
-  if (video.muted) {
-    speaker.classList.add("muted");
-  }
+  speaker.innerHTML = getSpeakerIcon(isLiveMuted || activeAudioCamera !== camera.id);
+  speaker.classList.toggle("muted", isLiveMuted || activeAudioCamera !== camera.id);
 
   speaker.addEventListener("click", () => {
-    setActiveAudio(camera.id);
+    toggleCameraAudio(camera.id);
   });
 
   tile.append(title, video, placeholder, speaker);
@@ -122,39 +120,41 @@ function getSpeakerIcon(isMuted) {
   if (isMuted) {
     return `
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M16.5 12a4.5 4.5 0 0 0-3.5-4.38v8.76A4.5 4.5 0 0 0 16.5 12Zm3.5 0c0-2.33-1.2-4.38-3-5.57v2.33c.7.89 1.1 2.01 1.1 3.24s-.4 2.35-1.1 3.24v2.33c1.8-1.2 3-3.24 3-5.57ZM5 9v6h4l5 5V4L9 9H5Zm13.59-5L20 5.41 15.41 10 20 14.59 18.59 16 14 11.41 9.41 16 8 14.59 12.59 10 8 5.41 9.41 4 14 8.59 18.59 4Z" />
+        <path d="M5 9v6h4l5 5V4L9 9H5Zm11.3 3.3L20 16l-1.3 1.3-3.7-3.7-3.7 3.7L10 16l3.7-3.7L10 8.6 11.3 7.3l3.7 3.7 3.7-3.7L20 8.6Z" />
       </svg>
     `;
   }
   return `
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M16.5 12a4.5 4.5 0 0 0-3.5-4.38v8.76A4.5 4.5 0 0 0 16.5 12Zm3.5 0c0-2.33-1.2-4.38-3-5.57v2.33c.7.89 1.1 2.01 1.1 3.24s-.4 2.35-1.1 3.24v2.33c1.8-1.2 3-3.24 3-5.57ZM5 9v6h4l5 5V4L9 9H5Z" />
+      <path d="M5 9v6h4l5 5V4L9 9H5Zm11.5 3a4.5 4.5 0 0 0-3.5-4.38v8.76A4.5 4.5 0 0 0 16.5 12Zm3.5 0c0-2.33-1.2-4.38-3-5.57v2.33c.7.89 1.1 2.01 1.1 3.24s-.4 2.35-1.1 3.24v2.33c1.8-1.2 3-3.24 3-5.57Z" />
     </svg>
   `;
 }
 
-function setActiveAudio(cameraId) {
-  activeAudioCamera = cameraId;
+function applyAudioState() {
   const videos = document.querySelectorAll("video[data-camera]");
   const speakers = document.querySelectorAll(".speaker-toggle");
 
   videos.forEach((video) => {
-    video.muted = video.dataset.camera !== cameraId || isGloballyMuted;
+    const isMuted = isLiveMuted || video.dataset.camera !== activeAudioCamera;
+    video.muted = isMuted;
   });
 
   speakers.forEach((button) => {
-    const isMuted = button.parentElement.dataset.camera !== cameraId || isGloballyMuted;
+    const isMuted = isLiveMuted || button.parentElement.dataset.camera !== activeAudioCamera;
     button.classList.toggle("muted", isMuted);
     button.innerHTML = getSpeakerIcon(isMuted);
   });
 }
 
-let isGloballyMuted = false;
-function toggleGlobalMute() {
-  isGloballyMuted = !isGloballyMuted;
-  globalMuteLabel.textContent = isGloballyMuted ? "Unmute" : "Mute all";
-  globalMuteIcon.textContent = isGloballyMuted ? "🔇" : "🔊";
-  setActiveAudio(activeAudioCamera);
+function toggleCameraAudio(cameraId) {
+  if (activeAudioCamera === cameraId) {
+    isLiveMuted = !isLiveMuted;
+  } else {
+    activeAudioCamera = cameraId;
+    isLiveMuted = false;
+  }
+  applyAudioState();
 }
 
 async function loadCameras() {
@@ -196,7 +196,10 @@ async function loadCameras() {
     rewindCamera.appendChild(option);
   });
 
-  setActiveAudio(activeAudioCamera);
+  if (!cameras.some((camera) => camera.id === activeAudioCamera)) {
+    activeAudioCamera = cameras[0]?.id ?? activeAudioCamera;
+  }
+  applyAudioState();
 }
 
 function attachLiveStream(video, cameraId, placeholder) {
@@ -264,6 +267,76 @@ async function loadActivity() {
   }
 }
 
+function formatDateTimeLocal(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  const pad = (number) => number.toString().padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function setDefaultDownloadTime() {
+  const startInput = document.getElementById("downloadStart");
+  const start = new Date(Date.now() - 60 * 1000);
+  startInput.value = formatDateTimeLocal(start);
+}
+
+function setDefaultRewindTime() {
+  const now = new Date();
+  rewindTime.value = formatDateTimeLocal(now);
+}
+
+function getSelectedQuality() {
+  return downloadQuality?.value || "high";
+}
+
+async function requestDownloadForRange({ cameraIds, start, end, statusElement }) {
+  if (!Array.isArray(cameraIds) || cameraIds.length === 0) {
+    statusElement.textContent = "Select at least one camera.";
+    return;
+  }
+
+  statusElement.textContent = "Preparing download…";
+  const apiToken = await getApiToken({ promptIfMissing: true });
+  if (!apiToken) {
+    statusElement.textContent = "Download cancelled (missing pairing code).";
+    return;
+  }
+  try {
+    const response = await fetch("/api/download", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiToken}`
+      },
+      body: JSON.stringify({
+        cameras: cameraIds,
+        startTimestamp: start,
+        endTimestamp: end,
+        quality: getSelectedQuality()
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      if (response.status === 401) {
+        localStorage.removeItem(apiTokenStorageKey);
+      }
+      statusElement.textContent = error.error ?? "Download failed.";
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "chickencams-download.zip";
+    link.click();
+    URL.revokeObjectURL(url);
+    statusElement.textContent = "Download ready.";
+  } catch (error) {
+    statusElement.textContent = "Download failed. Check the server logs.";
+  }
+}
+
 async function requestDownload() {
   const startInput = document.getElementById("downloadStart");
   const durationInput = document.getElementById("downloadDuration");
@@ -282,46 +355,12 @@ async function requestDownload() {
   const start = new Date(startInput.value).getTime();
   const end = start + duration * 1000;
 
-  downloadStatus.textContent = "Preparing download…";
-  const apiToken = await getApiToken({ promptIfMissing: true });
-  if (!apiToken) {
-    downloadStatus.textContent = "Download cancelled (missing pairing code).";
-    return;
-  }
-  try {
-    const response = await fetch("/api/download", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiToken}`
-      },
-      body: JSON.stringify({
-        cameras: checked.map((item) => item.value),
-        startTimestamp: start,
-        endTimestamp: end
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      if (response.status === 401) {
-        localStorage.removeItem(apiTokenStorageKey);
-      }
-      downloadStatus.textContent = error.error ?? "Download failed.";
-      return;
-    }
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "chickencams-download.zip";
-    link.click();
-    URL.revokeObjectURL(url);
-    downloadStatus.textContent = "Download ready.";
-  } catch (error) {
-    downloadStatus.textContent = "Download failed. Check the server logs.";
-  }
+  await requestDownloadForRange({
+    cameraIds: checked.map((item) => item.value),
+    start,
+    end,
+    statusElement: downloadStatus
+  });
 }
 
 function loadRewindStream() {
@@ -345,15 +384,32 @@ function loadRewindStream() {
     rewindPlayer.src = streamUrl;
   }
 
-  if (rewindTime.value) {
-    const target = new Date(rewindTime.value).getTime();
-    rewindPlayer.addEventListener("loadedmetadata", () => {
-      const deltaSeconds = (Date.now() - target) / 1000;
-      if (deltaSeconds > 0) {
-        rewindPlayer.currentTime = Math.max(0, rewindPlayer.duration - deltaSeconds);
-      }
-    }, { once: true });
+  rewindPlayer.addEventListener("loadedmetadata", () => {
+    const liveEdge = rewindPlayer.duration;
+    const windowSeconds = Number.parseInt(rewindWindow.value, 10) || 3600;
+    const target = rewindTime.value ? new Date(rewindTime.value).getTime() : Date.now();
+    const deltaSeconds = Math.max(0, (Date.now() - target) / 1000);
+    const minTime = Math.max(0, liveEdge - windowSeconds);
+    const desiredTime = Math.max(minTime, liveEdge - deltaSeconds);
+    rewindPlayer.currentTime = Math.min(liveEdge, desiredTime);
+  }, { once: true });
+}
+
+async function downloadLast30Seconds() {
+  const cameraId = rewindCamera.value;
+  if (!cameraId) {
+    rewindDownloadStatus.textContent = "Select a camera first.";
+    return;
   }
+  const target = rewindTime.value ? new Date(rewindTime.value).getTime() : Date.now();
+  const start = target - 30 * 1000;
+  const end = target;
+  await requestDownloadForRange({
+    cameraIds: [cameraId],
+    start,
+    end,
+    statusElement: rewindDownloadStatus
+  });
 }
 
 function setupActivityObserver() {
@@ -367,14 +423,16 @@ function setupActivityObserver() {
   observer.observe(activityStatus);
 }
 
-globalMuteButton.addEventListener("click", toggleGlobalMute);
-
 rewindCamera.addEventListener("change", loadRewindStream);
 rewindTime.addEventListener("change", loadRewindStream);
+rewindWindow.addEventListener("change", loadRewindStream);
 
 downloadButton.addEventListener("click", requestDownload);
+rewindDownloadButton.addEventListener("click", downloadLast30Seconds);
 
 loadCameras();
 loadActivity();
 setupActivityObserver();
 setActiveSection("live");
+setDefaultDownloadTime();
+setDefaultRewindTime();

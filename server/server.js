@@ -27,6 +27,7 @@ function loadConfig() {
     server: { ...base.server, ...override.server },
     paths: { ...base.paths, ...override.paths },
     hls: { ...base.hls, ...override.hls },
+    storage: { ...base.storage, ...override.storage },
     cameras: Array.isArray(override.cameras) ? override.cameras : base.cameras
   };
 }
@@ -84,6 +85,9 @@ if (!apiToken) {
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
   ? config.hls.recordingSafetyBufferSeconds
   : 5;
+const maxBackupBytes = Number.isFinite(config.storage?.maxBackupGb)
+  ? config.storage.maxBackupGb * 1024 * 1024 * 1024
+  : null;
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -96,6 +100,59 @@ function ensureStoragePaths() {
 }
 
 ensureStoragePaths();
+
+function listBackupFiles(root) {
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+  const files = [];
+  const cameraDirs = fs.readdirSync(root);
+  for (const cameraDir of cameraDirs) {
+    const fullDir = path.join(root, cameraDir);
+    if (!fs.statSync(fullDir).isDirectory()) {
+      continue;
+    }
+    for (const file of fs.readdirSync(fullDir)) {
+      if (!file.endsWith(".mp4")) {
+        continue;
+      }
+      const fullPath = path.join(fullDir, file);
+      try {
+        const stats = fs.statSync(fullPath);
+        files.push({ path: fullPath, size: stats.size, mtimeMs: stats.mtimeMs });
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+  return files;
+}
+
+function enforceBackupStorageCap() {
+  if (!maxBackupBytes) {
+    return;
+  }
+  const files = listBackupFiles(recordingsRoot);
+  let totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize <= maxBackupBytes) {
+    return;
+  }
+  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  for (const file of files) {
+    if (totalSize <= maxBackupBytes) {
+      break;
+    }
+    try {
+      fs.unlinkSync(file.path);
+      totalSize -= file.size;
+    } catch (error) {
+      continue;
+    }
+  }
+}
+
+enforceBackupStorageCap();
+setInterval(enforceBackupStorageCap, 10 * 60 * 1000);
 
 function requireApiToken(req, res, next) {
   if (!apiToken) {
@@ -196,7 +253,7 @@ app.get("/api/rewind/:cameraId", (req, res) => {
 });
 
 app.post("/api/download", requireApiToken, async (req, res) => {
-  const { cameras, startTimestamp, endTimestamp } = req.body ?? {};
+  const { cameras, startTimestamp, endTimestamp, quality } = req.body ?? {};
   if (!Array.isArray(cameras) || cameras.length === 0) {
     res.status(400).json({ error: "Select at least one camera." });
     return;
@@ -245,6 +302,8 @@ app.post("/api/download", requireApiToken, async (req, res) => {
 
   archive.pipe(res);
 
+  const selectedQuality = ["high", "med", "low"].includes(quality) ? quality : "high";
+
   for (const cameraId of validCameras) {
     const segments = findSegmentsForRange(
       recordingsRoot,
@@ -258,7 +317,7 @@ app.post("/api/download", requireApiToken, async (req, res) => {
       continue;
     }
 
-    const stitchedPath = await stitchSegments(cameraId, segments);
+    const stitchedPath = await stitchSegments(cameraId, segments, selectedQuality);
     if (stitchedPath) {
       const filename = `${cameraId}-${start}-${end}.mp4`;
       archive.file(stitchedPath, { name: filename });
@@ -349,7 +408,30 @@ function findSegmentsForRange(root, cameraId, start, end, segmentDurationSeconds
     .map((entry) => path.join(cameraDir, entry.file));
 }
 
-async function stitchSegments(cameraId, segments) {
+function getTranscodeSettings(quality) {
+  if (quality === "med") {
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "96k"];
+  }
+  if (quality === "low") {
+    return [
+      "-vf",
+      "scale=-2:480",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "30",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "96k"
+    ];
+  }
+  return ["-c", "copy"];
+}
+
+async function stitchSegments(cameraId, segments, quality = "high") {
   const tmpDir = path.join(rootDir, ".tmp");
   if (!fs.existsSync(tmpDir)) {
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -369,8 +451,7 @@ async function stitchSegments(cameraId, segments) {
       "0",
       "-i",
       listFile,
-      "-c",
-      "copy",
+      ...getTranscodeSettings(quality),
       outputFile
     ]);
 

@@ -9,14 +9,6 @@
   </head>
   <body>
     <main>
-      <header>
-        <h1>Chickencams</h1>
-        <div class="top-tabs">
-          <button class="top-tab" data-tab="download">Download</button>
-          <button class="top-tab" data-tab="rewind">Rewind</button>
-        </div>
-      </header>
-
       <section id="live" class="section">
         <div class="camera-grid" id="cameraGrid"></div>
       </section>
@@ -24,7 +16,6 @@
       <section id="activity" class="section hidden">
         <div class="card">
           <h2>Recent Activity</h2>
-          <p class="notice">Latest motion clips across all cameras. Scroll to load more.</p>
           <div class="activity-list" id="activityList"></div>
           <p class="notice" id="activityStatus">Loading…</p>
         </div>
@@ -33,15 +24,22 @@
       <section id="download" class="section hidden">
         <div class="card">
           <h2>Download Clips</h2>
-          <p class="notice">Select cameras and a time range (10 seconds to 5 minutes).</p>
           <div class="form-grid">
             <div class="field">
-              <label for="downloadStart">Start time (24h)</label>
+              <label for="downloadStart">Start time</label>
               <input type="datetime-local" id="downloadStart" />
             </div>
             <div class="field">
               <label for="downloadDuration">Duration (seconds)</label>
               <input type="number" id="downloadDuration" min="10" max="300" value="60" />
+            </div>
+            <div class="field">
+              <label for="downloadQuality">Quality</label>
+              <select id="downloadQuality">
+                <option value="high">High (visually lossless)</option>
+                <option value="med">Medium</option>
+                <option value="low">Low</option>
+              </select>
             </div>
           </div>
           <div class="field" style="margin-top: 16px;">
@@ -56,7 +54,6 @@
       <section id="rewind" class="section hidden">
         <div class="card">
           <h2>Rewind</h2>
-          <p class="notice">Pick a camera and time, then scrub through HLS DVR playback.</p>
           <div class="form-grid">
             <div class="field">
               <label for="rewindCamera">Camera</label>
@@ -66,22 +63,30 @@
               <label for="rewindTime">Timestamp</label>
               <input type="datetime-local" id="rewindTime" />
             </div>
+            <div class="field">
+              <label for="rewindWindow">Timeline range</label>
+              <select id="rewindWindow">
+                <option value="900">15 minutes</option>
+                <option value="3600" selected>1 hour</option>
+                <option value="18000">5 hours</option>
+                <option value="43200">12 hours</option>
+              </select>
+            </div>
           </div>
           <div class="rewind-player">
             <video id="rewindPlayer" controls></video>
           </div>
+          <button class="secondary-button" id="rewindDownloadButton">Download last 30 seconds</button>
+          <p class="notice" id="rewindDownloadStatus"></p>
         </div>
       </section>
-
-      <button class="mute-floating" id="globalMuteButton">
-        <span id="globalMuteIcon">🔊</span>
-        <span id="globalMuteLabel">Mute all</span>
-      </button>
     </main>
 
     <div class="tabs-bottom">
       <button class="bottom-tab active" data-tab="live">Live</button>
+      <button class="bottom-tab" data-tab="rewind">Rewind</button>
       <button class="bottom-tab" data-tab="activity">Activity</button>
+      <button class="bottom-tab" data-tab="download">Download</button>
     </div>
 
     <script src="/app.js"></script>
