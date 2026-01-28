@@ -5,7 +5,8 @@ import { fileURLToPath } from "url";
 import morgan from "morgan";
 import archiver from "archiver";
 import mime from "mime-types";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
+import dgram from "dgram";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +75,7 @@ app.use(express.static(publicDir));
 const streamsRoot = path.resolve(rootDir, config.paths.streamsRoot);
 const recordingsRoot = path.resolve(rootDir, config.paths.recordingsRoot);
 const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
+const encoderRoot = path.join(__dirname, "ffmpeg");
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -105,6 +107,170 @@ function ensureStoragePaths() {
 }
 
 ensureStoragePaths();
+
+const encoderProcesses = new Map();
+
+function isSrtSource(source) {
+  return typeof source === "string" && source.startsWith("srt://");
+}
+
+function isSrtListener(source) {
+  return typeof source === "string" && /mode=listener/i.test(source);
+}
+
+function hasFfmpeg() {
+  const result = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function hasCommand(command) {
+  const result = spawnSync(command, ["--version"], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function spawnEncoder(scriptName, args, label) {
+  const scriptPath = path.join(encoderRoot, scriptName);
+  const child = spawn(scriptPath, args, { stdio: "inherit" });
+  encoderProcesses.set(label, child);
+  child.on("close", (code) => {
+    encoderProcesses.delete(label);
+    console.warn(`[encoders] ${label} stopped with code ${code ?? "unknown"}.`);
+  });
+  child.on("error", (error) => {
+    encoderProcesses.delete(label);
+    console.warn(`[encoders] ${label} failed to start: ${error.message}`);
+  });
+}
+
+function listUdpPortOwners(port) {
+  if (hasCommand("lsof")) {
+    const result = spawnSync("lsof", ["-nP", `-iUDP:${port}`], { encoding: "utf-8" });
+    if (result.status === 0 && result.stdout) {
+      const lines = result.stdout.split("\n").slice(1).filter(Boolean);
+      return lines
+        .map((line) => line.trim().split(/\s+/))
+        .filter((parts) => parts.length >= 2)
+        .map(([command, pid]) => ({ command, pid: Number.parseInt(pid, 10) }))
+        .filter((entry) => Number.isFinite(entry.pid));
+    }
+  }
+  if (hasCommand("ss")) {
+    const result = spawnSync("ss", ["-u", "-l", "-n", "-p"], { encoding: "utf-8" });
+    if (result.status !== 0 || !result.stdout) {
+      return [];
+    }
+    const owners = [];
+    for (const line of result.stdout.split("\n")) {
+      if (!line.includes(`:${port}`)) {
+        continue;
+      }
+      const match = line.match(/users:\(\("([^"]+)",pid=(\d+)/);
+      if (!match) {
+        continue;
+      }
+      owners.push({ command: match[1], pid: Number.parseInt(match[2], 10) });
+    }
+    return owners.filter((entry) => Number.isFinite(entry.pid));
+  }
+  return [];
+}
+
+async function releaseFfmpegPort(port) {
+  const owners = listUdpPortOwners(port).filter((entry) => entry.command === "ffmpeg");
+  if (owners.length === 0) {
+    return false;
+  }
+  for (const owner of owners) {
+    try {
+      process.kill(owner.pid, "SIGTERM");
+    } catch (error) {
+      continue;
+    }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const remaining = listUdpPortOwners(port).filter((entry) => entry.command === "ffmpeg");
+  if (remaining.length === 0) {
+    return true;
+  }
+  for (const owner of remaining) {
+    try {
+      process.kill(owner.pid, "SIGKILL");
+    } catch (error) {
+      continue;
+    }
+  }
+  return true;
+}
+
+function checkUdpPortAvailable(port, host) {
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket("udp4");
+    const handleError = (error) => {
+      socket.close();
+      if (error && error.code === "EADDRINUSE") {
+        resolve(false);
+        return;
+      }
+      resolve(false);
+    };
+    socket.once("error", handleError);
+    socket.bind(port, host, () => {
+      socket.close();
+      resolve(true);
+    });
+  });
+}
+
+async function startCameraEncoders() {
+  if (!config.autoStartEncoders) {
+    console.log("[encoders] Auto-start disabled.");
+    return;
+  }
+  if (!hasFfmpeg()) {
+    console.warn(
+      "[encoders] ffmpeg not found. Install ffmpeg or disable autoStartEncoders to suppress this warning."
+    );
+    return;
+  }
+  for (const camera of config.cameras) {
+    if (!camera.enabled || !isSrtSource(camera.source)) {
+      continue;
+    }
+    const hlsLabel = `${camera.id}:hls`;
+    const recordLabel = `${camera.id}:record`;
+    const match = camera.source.match(/^srt:\/\/([^:/]+):(\d+)/i);
+    const ingestHost = match?.[1] ?? config.ingestHost ?? "0.0.0.0";
+    const ingestPort = match ? Number.parseInt(match[2], 10) : null;
+    if (Number.isFinite(ingestPort)) {
+      let available = await checkUdpPortAvailable(ingestPort, ingestHost);
+      if (!available) {
+        const released = await releaseFfmpegPort(ingestPort);
+        if (released) {
+          available = await checkUdpPortAvailable(ingestPort, ingestHost);
+        }
+      }
+      if (!available) {
+        console.warn(
+          `[encoders] ${camera.id} skipped because ${ingestHost}:${ingestPort} is already in use.`
+        );
+        continue;
+      }
+    }
+    if (!encoderProcesses.has(hlsLabel)) {
+      const recordingsArg = isSrtListener(camera.source) ? recordingsRoot : "";
+      spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot, recordingsArg], hlsLabel);
+    }
+    if (isSrtListener(camera.source)) {
+      console.warn(
+        `[encoders] ${camera.id} recording handled by the HLS encoder for SRT listener sources.`
+      );
+      continue;
+    }
+    if (!encoderProcesses.has(recordLabel)) {
+      spawnEncoder("record_segments.sh", [camera.id, camera.source, recordingsRoot], recordLabel);
+    }
+  }
+}
 
 function listBackupFiles(root) {
   if (!fs.existsSync(root)) {
@@ -546,4 +712,5 @@ function startServer(port, host, attemptsRemaining = 5) {
 }
 
 const { port, host } = config.server;
+startCameraEncoders();
 startServer(port, host);

@@ -30,6 +30,8 @@ The UI listens on port `3010` by default, lists the aggregator's LAN IPs, and pr
 
 This sends an H.264 stream over SRT to the server listener port defined in `server/config.default.json`.
 
+The script now performs a quick preflight check with `nc` to confirm the server is listening on the requested port before starting the stream.
+
 ## Camera registry + supervisor
 
 For stable device binding, watchdog restarts, and hotplug handling, update `registry.json` and run the supervisor:

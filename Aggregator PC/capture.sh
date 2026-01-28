@@ -6,6 +6,18 @@ DEVICE=${2:?"video device required (/dev/video0)"}
 SERVER_HOST=${3:?"server hostname required"}
 SERVER_PORT=${4:?"server port required"}
 
+if ! command -v nc >/dev/null 2>&1; then
+  echo "Error: nc (netcat) is required to preflight the server listener check." >&2
+  exit 1
+fi
+
+echo "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
+if ! nc -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; then
+  echo "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}." >&2
+  echo "Hint: Ensure the server is running and listening on that port before starting capture." >&2
+  exit 1
+fi
+
 if [[ "${DEVICE}" =~ ^/dev/video[0-9]+$ ]]; then
   echo "Error: Use a stable /dev/v4l/by-id or /dev/v4l/by-path symlink instead of ${DEVICE}." >&2
   exit 1

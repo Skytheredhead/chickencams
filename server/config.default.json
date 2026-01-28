@@ -9,6 +9,7 @@
     "activityRoot": "./activity",
     "cameraRegistryPath": "./server/camera-registry.json"
   },
+  "autoStartEncoders": true,
   "ingestHost": "0.0.0.0",
   "health": {
     "onlineSeconds": 5,
