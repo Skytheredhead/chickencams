@@ -7,7 +7,7 @@
     "streamsRoot": "./streams",
     "recordingsRoot": "./recordings",
     "activityRoot": "./activity",
-    "cameraRegistryPath": "./camera-registry.json"
+    "cameraRegistryPath": "./server/camera-registry.json"
   },
   "ingestHost": "0.0.0.0",
   "health": {
