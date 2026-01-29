@@ -22,9 +22,11 @@ mkdir -p "${OUTPUT_DIR}/${CAMERA_ID}"
 TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
 
 ffmpeg \
-  -fflags +genpts \
+  -fflags +genpts+discardcorrupt \
   -use_wallclock_as_timestamps 1 \
   -avoid_negative_ts make_zero \
+  -err_detect ignore_err \
+  -max_delay 0 \
   -i "${SOURCE_URL}" \
   -vf "${TIMESTAMP_FILTER}" \
   -c:v "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v 2000k -maxrate 2200k -bufsize 4000k -r 30 -g 30 -keyint_min 30 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \

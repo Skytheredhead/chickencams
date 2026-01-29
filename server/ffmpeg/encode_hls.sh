@@ -78,10 +78,12 @@ fi
 TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
 
 ffmpeg \
-  -fflags +genpts+nobuffer \
+  -fflags +genpts+nobuffer+discardcorrupt \
   -use_wallclock_as_timestamps 1 \
   -avoid_negative_ts make_zero \
   -flags low_delay \
+  -err_detect ignore_err \
+  -max_delay 0 \
   -strict experimental \
   -i "${SOURCE_URL}" \
   -filter_complex "[0:v]${TIMESTAMP_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
