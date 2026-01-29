@@ -66,7 +66,11 @@ function persistRuntimeConfig() {
 }
 
 const app = express();
-app.use(morgan("dev"));
+app.use(morgan("dev", {
+  skip(req) {
+    return req.path.startsWith("/streams") || req.path.startsWith("/api/cameras");
+  }
+}));
 app.use(express.json());
 
 const publicDir = path.join(rootDir, "public");

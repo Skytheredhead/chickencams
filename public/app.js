@@ -22,7 +22,7 @@ const rewindDownloadStatus = document.getElementById("rewindDownloadStatus");
 
 let cameras = [];
 let activeAudioCamera = "cam1";
-let isLiveMuted = false;
+let isLiveMuted = true;
 let activityCursor = 0;
 let activityLoading = false;
 let activityDone = false;
