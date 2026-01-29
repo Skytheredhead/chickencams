@@ -1,9 +1,5 @@
 # Chickencams
 
-A LAN-first multi-camera viewer with live feeds, downloads, rewinds, and activity detection (coming soon on the last two)
-
-## About
-
 Chickencams is a beautiful easy to use linux app that allows you to turn a couple of cheap webcams (or stripped laptop webcams) and turn them into a feature-rich home security system. The usb webcams run into a linux aggregate device (I'm using an old Thinkpad-W530) and having that re-encode the raw camera outputs and push them over your home internet to get to your main linux server. Said linux server takes the streams and puts em on 192.168.1.whatever:3000 where a user can stream, download, view activity, and rewind to see if you missed anything. Pretty flipping easy to use too.
 
 ## How it works (TLDR)
