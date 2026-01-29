@@ -78,7 +78,9 @@ fi
 TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
 
 ffmpeg \
-  -fflags nobuffer \
+  -fflags +genpts+nobuffer \
+  -use_wallclock_as_timestamps 1 \
+  -avoid_negative_ts make_zero \
   -flags low_delay \
   -strict experimental \
   -i "${SOURCE_URL}" \
