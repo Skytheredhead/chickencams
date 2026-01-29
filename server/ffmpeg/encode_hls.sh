@@ -40,6 +40,12 @@ for variant in 0 1 2 3; do
   mkdir -p "${OUTPUT_DIR}/${CAMERA_ID}/${variant}"
 done
 
+rm -f "${OUTPUT_DIR}/${CAMERA_ID}/master.m3u8"
+for variant in 0 1 2 3; do
+  rm -f "${OUTPUT_DIR}/${CAMERA_ID}/${variant}/"*.ts
+  rm -f "${OUTPUT_DIR}/${CAMERA_ID}/${variant}/"*.m3u8
+done
+
 RECORDING_ARGS=()
 if [[ -n "${RECORDINGS_DIR}" ]]; then
   mkdir -p "${RECORDINGS_DIR}/${CAMERA_ID}"

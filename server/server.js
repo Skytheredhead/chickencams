@@ -92,6 +92,9 @@ function buildSrtSource(ingestHost, port, fallbackSource) {
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
   ? config.hls.recordingSafetyBufferSeconds
   : 5;
+const encoderRestartSeconds = Number.isFinite(config.health?.encoderRestartSeconds)
+  ? config.health.encoderRestartSeconds
+  : 15;
 const maxBackupBytes = Number.isFinite(config.storage?.maxBackupGb)
   ? config.storage.maxBackupGb * 1024 * 1024 * 1024
   : null;
@@ -712,5 +715,10 @@ function startServer(port, host, attemptsRemaining = 5) {
 }
 
 const { port, host } = config.server;
-startCameraEncoders();
+if (config.autoStartEncoders) {
+  startCameraEncoders();
+  setInterval(startCameraEncoders, encoderRestartSeconds * 1000);
+} else {
+  startCameraEncoders();
+}
 startServer(port, host);
