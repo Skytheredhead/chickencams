@@ -13,7 +13,13 @@ TUNE=()
 PIX_FMT="yuv420p"
 SC_THRESHOLD=()
 
-if ! command -v nvidia-smi >/dev/null 2>&1; then
+supports_nvenc() {
+  command -v nvidia-smi >/dev/null 2>&1 || return 1
+  ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=128x72:rate=1 -t 0.1 \
+    -c:v h264_nvenc -f null - >/dev/null 2>&1
+}
+
+if ! supports_nvenc; then
   ENCODER="libx264"
   PRESET="veryfast"
   TUNE=(-tune zerolatency)
