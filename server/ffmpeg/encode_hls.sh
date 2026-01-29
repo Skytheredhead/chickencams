@@ -98,7 +98,7 @@ ffmpeg \
   "${AUDIO_CODEC[@]}" \
   -f hls \
   -hls_time 1 \
-  -hls_list_size 6 \
+  -hls_list_size 300 \
   -hls_flags delete_segments+append_list+independent_segments+program_date_time+temp_file \
   -master_pl_name master.m3u8 \
   -var_stream_map "${VAR_STREAM_MAP}" \

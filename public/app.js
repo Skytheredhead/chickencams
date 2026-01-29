@@ -235,29 +235,32 @@ function attachLiveStream(video, cameraId, placeholder, statusElement) {
   };
 
   if (!video.dataset.liveLockAttached) {
-    const ensureLiveEdge = () => {
+    const enforceDvrWindow = () => {
       if (!Number.isFinite(video.duration)) {
         return;
       }
       const liveEdge = video.duration;
-      if (liveEdge && liveEdge - video.currentTime > 1.5) {
-        video.currentTime = liveEdge;
+      const minTime = Math.max(0, liveEdge - 300);
+      if (video.currentTime < minTime) {
+        video.currentTime = minTime;
       }
     };
-    video.addEventListener("timeupdate", ensureLiveEdge);
-    video.addEventListener("loadedmetadata", ensureLiveEdge);
-    video.addEventListener("durationchange", ensureLiveEdge);
+    video.addEventListener("timeupdate", enforceDvrWindow);
+    video.addEventListener("loadedmetadata", enforceDvrWindow);
+    video.addEventListener("durationchange", enforceDvrWindow);
+    video.addEventListener("seeking", enforceDvrWindow);
     video.dataset.liveLockAttached = "true";
   }
 
   if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({
       lowLatencyMode: true,
-      backBufferLength: 0,
-      maxBufferLength: 2,
+      backBufferLength: 300,
+      maxBufferLength: 300,
+      maxMaxBufferLength: 300,
       maxLiveSyncPlaybackRate: 1.3,
-      liveSyncDurationCount: 1,
-      liveMaxLatencyDurationCount: 2
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 5
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
