@@ -26,11 +26,20 @@ if ! command -v nc >/dev/null 2>&1; then
 fi
 
 log "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
-if ! nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; then
-  log "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}."
-  log "Hint: Ensure the server is running and listening on that port before starting capture."
-  exit 1
-fi
+LISTENER_RETRY_COUNT=${LISTENER_RETRY_COUNT:-12}
+LISTENER_RETRY_DELAY=${LISTENER_RETRY_DELAY:-5}
+
+listener_attempt=0
+until nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; do
+  listener_attempt=$((listener_attempt + 1))
+  if (( listener_attempt > LISTENER_RETRY_COUNT )); then
+    log "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}."
+    log "Hint: Ensure the server is running and listening on that port before starting capture."
+    exit 1
+  fi
+  log "Listener not ready yet. Retrying in ${LISTENER_RETRY_DELAY}s... (${listener_attempt}/${LISTENER_RETRY_COUNT})"
+  sleep "${LISTENER_RETRY_DELAY}"
+done
 
 if [[ "${DEVICE}" =~ ^/dev/video[0-9]+$ ]]; then
   log "Error: Use a stable /dev/v4l/by-id or /dev/v4l/by-path symlink instead of ${DEVICE}."
@@ -68,12 +77,12 @@ fi
 exec ffmpeg \
   -fflags +genpts+nobuffer \
   -flags low_delay \
+  -use_wallclock_as_timestamps 1 \
   -thread_queue_size 64 \
   -f v4l2 \
   -framerate "${INPUT_FPS}" \
   -video_size 1280x720 \
   -i "${DEVICE}" \
-  -use_wallclock_as_timestamps 1 \
   -c:v libx264 \
   -preset veryfast \
   -tune zerolatency \
@@ -83,6 +92,8 @@ exec ffmpeg \
   -fps_mode drop \
   -max_delay 0 \
   -flush_packets 1 \
+  -muxpreload 0 \
+  -muxdelay 0 \
   -pix_fmt yuv420p \
   -f mpegts \
   "${PROGRESS_ARGS[@]}" \

@@ -52,7 +52,7 @@
   ],
   "hls": {
     "segmentDurationSeconds": 1,
-    "livePlaylistSize": 6,
+    "livePlaylistSize": 300,
     "recordingSegmentSeconds": 60,
     "recordingSafetyBufferSeconds": 5,
     "abr": [

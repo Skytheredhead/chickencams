@@ -13,7 +13,27 @@ TUNE=()
 PIX_FMT="yuv420p"
 SC_THRESHOLD=()
 
-if ! command -v nvidia-smi >/dev/null 2>&1; then
+supports_nvenc() {
+  command -v nvidia-smi >/dev/null 2>&1 || return 1
+  ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=128x72:rate=1 -t 0.1 \
+    -c:v h264_nvenc -f null - >/dev/null 2>&1
+}
+
+NVENC_RETRY_COUNT=${NVENC_RETRY_COUNT:-6}
+NVENC_RETRY_DELAY=${NVENC_RETRY_DELAY:-5}
+
+if ! supports_nvenc; then
+  attempts=0
+  while (( attempts < NVENC_RETRY_COUNT )); do
+    attempts=$((attempts + 1))
+    sleep "${NVENC_RETRY_DELAY}"
+    if supports_nvenc; then
+      break
+    fi
+  done
+fi
+
+if ! supports_nvenc; then
   ENCODER="libx264"
   PRESET="veryfast"
   TUNE=(-tune zerolatency)
@@ -75,9 +95,12 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
   )
 fi
 
-TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
+TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=32:fontcolor=white:box=1:boxcolor=0x00000099"
 
 ffmpeg \
+  -hide_banner \
+  -loglevel error \
+  -nostats \
   -fflags +genpts+nobuffer+discardcorrupt \
   -use_wallclock_as_timestamps 1 \
   -avoid_negative_ts make_zero \
@@ -95,7 +118,7 @@ ffmpeg \
   "${AUDIO_CODEC[@]}" \
   -f hls \
   -hls_time 1 \
-  -hls_list_size 6 \
+  -hls_list_size 300 \
   -hls_flags delete_segments+append_list+independent_segments+program_date_time+temp_file \
   -master_pl_name master.m3u8 \
   -var_stream_map "${VAR_STREAM_MAP}" \

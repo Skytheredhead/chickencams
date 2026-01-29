@@ -84,8 +84,28 @@ function buildCameraTile(camera) {
     toggleCameraAudio(camera.id);
   });
 
+  tile.addEventListener("click", (event) => {
+    if (event.target.closest(".speaker-toggle")) {
+      return;
+    }
+    requestFullscreen(video);
+  });
+
   tile.append(title, status, video, placeholder, speaker);
   return { tile, video, placeholder, status };
+}
+
+function requestFullscreen(element) {
+  if (!element || document.fullscreenElement) {
+    return;
+  }
+  if (element.requestFullscreen) {
+    element.requestFullscreen().catch(() => {});
+  } else if (element.webkitRequestFullscreen) {
+    element.webkitRequestFullscreen();
+  } else if (element.msRequestFullscreen) {
+    element.msRequestFullscreen();
+  }
 }
 
 function getStatusLabel(status) {
@@ -214,11 +234,33 @@ function attachLiveStream(video, cameraId, placeholder, statusElement) {
     }, 3000);
   };
 
+  if (!video.dataset.liveLockAttached) {
+    const enforceDvrWindow = () => {
+      if (!Number.isFinite(video.duration)) {
+        return;
+      }
+      const liveEdge = video.duration;
+      const minTime = Math.max(0, liveEdge - 300);
+      if (video.currentTime < minTime) {
+        video.currentTime = minTime;
+      }
+    };
+    video.addEventListener("timeupdate", enforceDvrWindow);
+    video.addEventListener("loadedmetadata", enforceDvrWindow);
+    video.addEventListener("durationchange", enforceDvrWindow);
+    video.addEventListener("seeking", enforceDvrWindow);
+    video.dataset.liveLockAttached = "true";
+  }
+
   if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({
       lowLatencyMode: true,
-      backBufferLength: 10,
-      maxLiveSyncPlaybackRate: 1.3
+      backBufferLength: 300,
+      maxBufferLength: 300,
+      maxMaxBufferLength: 300,
+      maxLiveSyncPlaybackRate: 1.3,
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 5
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
@@ -350,7 +392,8 @@ async function requestDownloadForRange({ cameraIds, start, end, statusElement })
         cameras: cameraIds,
         startTimestamp: start,
         endTimestamp: end,
-        quality: getSelectedQuality()
+        quality: getSelectedQuality(),
+        timezoneOffsetMinutes: new Date().getTimezoneOffset()
       })
     });
 
