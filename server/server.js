@@ -421,7 +421,7 @@ app.get("/api/rewind/:cameraId", (req, res) => {
 });
 
 app.post("/api/download", requireApiToken, async (req, res) => {
-  const { cameras, startTimestamp, endTimestamp, quality } = req.body ?? {};
+  const { cameras, startTimestamp, endTimestamp, quality, timezoneOffsetMinutes } = req.body ?? {};
   if (!Array.isArray(cameras) || cameras.length === 0) {
     res.status(400).json({ error: "Select at least one camera." });
     return;
@@ -461,7 +461,9 @@ app.post("/api/download", requireApiToken, async (req, res) => {
 
     const stitchedPath = await stitchSegments(cameraId, segments, selectedQuality);
     if (stitchedPath) {
-      const filename = `${cameraId}-${start}-${end}.mp4`;
+      const formattedStart = formatTimestampWithOffset(start, timezoneOffsetMinutes);
+      const formattedEnd = formatTimestampWithOffset(end, timezoneOffsetMinutes);
+      const filename = `${cameraId}-${formattedStart}-to-${formattedEnd}.mp4`;
       stitchedFiles.push({ path: stitchedPath, name: filename });
     }
   }
@@ -650,6 +652,17 @@ function getTranscodeSettings(quality) {
     ];
   }
   return ["-c", "copy"];
+}
+
+function formatTimestampWithOffset(timestampMs, offsetMinutes) {
+  if (!Number.isFinite(timestampMs)) {
+    return "unknown";
+  }
+  const offsetMs = Number.isFinite(offsetMinutes) ? offsetMinutes * 60 * 1000 : 0;
+  const date = new Date(timestampMs - offsetMs);
+  const pad = (value) => value.toString().padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}_` +
+    `${pad(date.getUTCHours())}-${pad(date.getUTCMinutes())}-${pad(date.getUTCSeconds())}`;
 }
 
 async function stitchSegments(cameraId, segments, quality = "high") {

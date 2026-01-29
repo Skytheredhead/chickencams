@@ -234,11 +234,30 @@ function attachLiveStream(video, cameraId, placeholder, statusElement) {
     }, 3000);
   };
 
+  if (!video.dataset.liveLockAttached) {
+    const ensureLiveEdge = () => {
+      if (!Number.isFinite(video.duration)) {
+        return;
+      }
+      const liveEdge = video.duration;
+      if (liveEdge && liveEdge - video.currentTime > 1.5) {
+        video.currentTime = liveEdge;
+      }
+    };
+    video.addEventListener("timeupdate", ensureLiveEdge);
+    video.addEventListener("loadedmetadata", ensureLiveEdge);
+    video.addEventListener("durationchange", ensureLiveEdge);
+    video.dataset.liveLockAttached = "true";
+  }
+
   if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({
       lowLatencyMode: true,
-      backBufferLength: 10,
-      maxLiveSyncPlaybackRate: 1.3
+      backBufferLength: 0,
+      maxBufferLength: 2,
+      maxLiveSyncPlaybackRate: 1.3,
+      liveSyncDurationCount: 1,
+      liveMaxLatencyDurationCount: 2
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
@@ -370,7 +389,8 @@ async function requestDownloadForRange({ cameraIds, start, end, statusElement })
         cameras: cameraIds,
         startTimestamp: start,
         endTimestamp: end,
-        quality: getSelectedQuality()
+        quality: getSelectedQuality(),
+        timezoneOffsetMinutes: new Date().getTimezoneOffset()
       })
     });
 
