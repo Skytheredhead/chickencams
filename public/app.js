@@ -84,8 +84,28 @@ function buildCameraTile(camera) {
     toggleCameraAudio(camera.id);
   });
 
+  tile.addEventListener("click", (event) => {
+    if (event.target.closest(".speaker-toggle")) {
+      return;
+    }
+    requestFullscreen(video);
+  });
+
   tile.append(title, status, video, placeholder, speaker);
   return { tile, video, placeholder, status };
+}
+
+function requestFullscreen(element) {
+  if (!element || document.fullscreenElement) {
+    return;
+  }
+  if (element.requestFullscreen) {
+    element.requestFullscreen().catch(() => {});
+  } else if (element.webkitRequestFullscreen) {
+    element.webkitRequestFullscreen();
+  } else if (element.msRequestFullscreen) {
+    element.msRequestFullscreen();
+  }
 }
 
 function getStatusLabel(status) {

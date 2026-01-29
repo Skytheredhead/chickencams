@@ -68,7 +68,13 @@ function persistRuntimeConfig() {
 const app = express();
 app.use(morgan("dev", {
   skip(req) {
-    return req.path.startsWith("/streams") || req.path.startsWith("/api/cameras");
+    const target = req.originalUrl || req.url || req.path || "";
+    return (
+      target.startsWith("/streams")
+      || target.startsWith("/activity")
+      || target.startsWith("/api/cameras")
+      || target.startsWith("/api/rewind")
+    );
   }
 }));
 app.use(express.json());
