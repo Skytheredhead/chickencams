@@ -17,6 +17,20 @@ supports_nvenc() {
     -c:v h264_nvenc -f null - >/dev/null 2>&1
 }
 
+NVENC_RETRY_COUNT=${NVENC_RETRY_COUNT:-6}
+NVENC_RETRY_DELAY=${NVENC_RETRY_DELAY:-5}
+
+if ! supports_nvenc; then
+  attempts=0
+  while (( attempts < NVENC_RETRY_COUNT )); do
+    attempts=$((attempts + 1))
+    sleep "${NVENC_RETRY_DELAY}"
+    if supports_nvenc; then
+      break
+    fi
+  done
+fi
+
 if ! supports_nvenc; then
   ENCODER="libx264"
   PRESET="veryfast"
