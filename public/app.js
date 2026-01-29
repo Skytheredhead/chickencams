@@ -203,6 +203,17 @@ async function loadCameras() {
 
 function attachLiveStream(video, cameraId, placeholder, statusElement) {
   const streamUrl = `/streams/${cameraId}/master.m3u8`;
+  let retryTimeout = null;
+  const scheduleRetry = () => {
+    if (retryTimeout) {
+      return;
+    }
+    retryTimeout = window.setTimeout(() => {
+      retryTimeout = null;
+      attachLiveStream(video, cameraId, placeholder, statusElement);
+    }, 3000);
+  };
+
   if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({
       lowLatencyMode: true,
@@ -218,12 +229,26 @@ function attachLiveStream(video, cameraId, placeholder, statusElement) {
         statusElement.textContent = getStatusLabel("ONLINE");
       }
     });
-    hls.on(Hls.Events.ERROR, () => {
+    hls.on(Hls.Events.ERROR, (_event, data) => {
       placeholder?.classList.remove("hidden");
-      placeholder.textContent = "Live feed unavailable.";
+      placeholder.textContent = "Waiting for live feed…";
       if (statusElement) {
         statusElement.dataset.state = "DEGRADED";
         statusElement.textContent = getStatusLabel("DEGRADED");
+      }
+      if (data?.fatal) {
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+          scheduleRetry();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+          scheduleRetry();
+          return;
+        }
+        hls.destroy();
+        scheduleRetry();
       }
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -235,6 +260,15 @@ function attachLiveStream(video, cameraId, placeholder, statusElement) {
         statusElement.textContent = getStatusLabel("ONLINE");
       }
     }, { once: true });
+    video.addEventListener("error", () => {
+      placeholder?.classList.remove("hidden");
+      placeholder.textContent = "Waiting for live feed…";
+      if (statusElement) {
+        statusElement.dataset.state = "DEGRADED";
+        statusElement.textContent = getStatusLabel("DEGRADED");
+      }
+      scheduleRetry();
+    });
   }
 }
 
