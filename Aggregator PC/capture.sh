@@ -65,7 +65,7 @@ if [[ "${FFMPEG_PROGRESS:-}" == "1" ]]; then
   PROGRESS_ARGS=(-progress pipe:1 -nostats)
 fi
 
-ffmpeg \
+exec ffmpeg \
   -fflags +genpts+nobuffer \
   -flags low_delay \
   -thread_queue_size 64 \
