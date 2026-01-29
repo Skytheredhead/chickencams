@@ -42,4 +42,4 @@ Go on a browser and go to the aggregator pc's ip. Ask chatgpt how to find that.
 Select the video device for each camera. If you see two, its cause linux is goofy, just select the -index0 one. Leave the ports alone on their default settings (9001-9005)
 
 
-uh like and subscribe if you need help. This ___might___ be maintained. probably not. who knows. I made this so I can spy on my chickens from halfway across the country.
+uh like and subscribe if you need help. This ___might___ be maintained. probably not. who knows. I made this so I can spy on my chickens from all the way across the country.
