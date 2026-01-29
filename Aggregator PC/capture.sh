@@ -77,12 +77,12 @@ fi
 exec ffmpeg \
   -fflags +genpts+nobuffer \
   -flags low_delay \
+  -use_wallclock_as_timestamps 1 \
   -thread_queue_size 64 \
   -f v4l2 \
   -framerate "${INPUT_FPS}" \
   -video_size 1280x720 \
   -i "${DEVICE}" \
-  -use_wallclock_as_timestamps 1 \
   -c:v libx264 \
   -preset veryfast \
   -tune zerolatency \
@@ -92,6 +92,8 @@ exec ffmpeg \
   -fps_mode drop \
   -max_delay 0 \
   -flush_packets 1 \
+  -muxpreload 0 \
+  -muxdelay 0 \
   -pix_fmt yuv420p \
   -f mpegts \
   "${PROGRESS_ARGS[@]}" \
