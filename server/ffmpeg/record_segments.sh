@@ -19,7 +19,7 @@ fi
 
 mkdir -p "${OUTPUT_DIR}/${CAMERA_ID}"
 
-TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%m/%d/%Y - %H\\\\:%M\\\\:%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
+TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%m/%d/%Y - %H\\:%M\\:%S}':x=w-tw-20:y=h-th-20:fontsize=20:fontcolor=white:box=1:boxcolor=0x00000099"
 
 ffmpeg \
   -i "${SOURCE_URL}" \
