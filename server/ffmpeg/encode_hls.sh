@@ -11,11 +11,13 @@ ENCODER="h264_nvenc"
 PRESET="p4"
 TUNE=()
 PIX_FMT="yuv420p"
+SC_THRESHOLD=()
 
 if ! command -v nvidia-smi >/dev/null 2>&1; then
   ENCODER="libx264"
   PRESET="veryfast"
   TUNE=(-tune zerolatency)
+  SC_THRESHOLD=(-sc_threshold 0)
 fi
 
 AUDIO_PRESENT=false
@@ -40,6 +42,12 @@ for variant in 0 1 2 3; do
   mkdir -p "${OUTPUT_DIR}/${CAMERA_ID}/${variant}"
 done
 
+rm -f "${OUTPUT_DIR}/${CAMERA_ID}/master.m3u8"
+for variant in 0 1 2 3; do
+  rm -f "${OUTPUT_DIR}/${CAMERA_ID}/${variant}/"*.ts
+  rm -f "${OUTPUT_DIR}/${CAMERA_ID}/${variant}/"*.m3u8
+done
+
 RECORDING_ARGS=()
 if [[ -n "${RECORDINGS_DIR}" ]]; then
   mkdir -p "${RECORDINGS_DIR}/${CAMERA_ID}"
@@ -49,15 +57,15 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
     -c:v "${ENCODER}"
     -preset "${PRESET}"
     "${TUNE[@]}"
-    -pix_fmt "${PIX_FMT}"
+    -pix_fmt:v "${PIX_FMT}"
     -b:v 2000k
     -maxrate 2200k
     -bufsize 4000k
     -r 30
     -g 30
     -keyint_min 30
-    -sc_threshold 0
-    -force_key_frames "expr:gte(t,n_forced*1)"
+    "${SC_THRESHOLD[@]}"
+    -force_key_frames:v "expr:gte(t,n_forced*1)"
     "${AUDIO_CODEC[@]}"
     -f segment
     -segment_time 60
@@ -75,10 +83,10 @@ ffmpeg \
   -strict experimental \
   -i "${SOURCE_URL}" \
   -filter_complex "[0:v]${TIMESTAMP_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
-  -map "[v1]" -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:0 2000k -maxrate:v:0 2200k -bufsize:v:0 4000k -r:v:0 30 -g:v:0 30 -keyint_min:v:0 30 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
-  -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:1 1000k -maxrate:v:1 1100k -bufsize:v:1 2000k -r:v:1 20 -g:v:1 20 -keyint_min:v:1 20 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
-  -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:2 500k -maxrate:v:2 600k -bufsize:v:2 1200k -r:v:2 20 -g:v:2 20 -keyint_min:v:2 20 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
-  -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt "${PIX_FMT}" -b:v:3 100k -maxrate:v:3 120k -bufsize:v:3 300k -r:v:3 15 -g:v:3 15 -keyint_min:v:3 15 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" \
+  -map "[v1]" -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:0 "${PIX_FMT}" -b:v:0 2000k -maxrate:v:0 2200k -bufsize:v:0 4000k -r:v:0 30 -g:v:0 30 -keyint_min:v:0 30 "${SC_THRESHOLD[@]}" -force_key_frames:v:0 "expr:gte(t,n_forced*1)" \
+  -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:1 "${PIX_FMT}" -b:v:1 1000k -maxrate:v:1 1100k -bufsize:v:1 2000k -r:v:1 20 -g:v:1 20 -keyint_min:v:1 20 "${SC_THRESHOLD[@]}" -force_key_frames:v:1 "expr:gte(t,n_forced*1)" \
+  -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:2 "${PIX_FMT}" -b:v:2 500k -maxrate:v:2 600k -bufsize:v:2 1200k -r:v:2 20 -g:v:2 20 -keyint_min:v:2 20 "${SC_THRESHOLD[@]}" -force_key_frames:v:2 "expr:gte(t,n_forced*1)" \
+  -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:3 "${PIX_FMT}" -b:v:3 100k -maxrate:v:3 120k -bufsize:v:3 300k -r:v:3 15 -g:v:3 15 -keyint_min:v:3 15 "${SC_THRESHOLD[@]}" -force_key_frames:v:3 "expr:gte(t,n_forced*1)" \
   "${AUDIO_MAP[@]}" \
   "${AUDIO_CODEC[@]}" \
   -f hls \
