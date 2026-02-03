@@ -19,6 +19,13 @@ const rewindWindow = document.getElementById("rewindWindow");
 const rewindPlayer = document.getElementById("rewindPlayer");
 const rewindDownloadButton = document.getElementById("rewindDownloadButton");
 const rewindDownloadStatus = document.getElementById("rewindDownloadStatus");
+const settingsToggle = document.getElementById("settingsToggle");
+const settingsMenu = document.getElementById("settingsMenu");
+const settingsClose = document.getElementById("settingsClose");
+const videoSizeSlider = document.getElementById("videoSizeSlider");
+const videoSizeValue = document.getElementById("videoSizeValue");
+const videoSizeHint = document.getElementById("videoSizeHint");
+const fullscreenOverlay = document.getElementById("fullscreenOverlay");
 
 let cameras = [];
 let activeAudioCamera = "cam1";
@@ -27,7 +34,14 @@ let activityCursor = 0;
 let activityLoading = false;
 let activityDone = false;
 let rewindHls = null;
+let expandedTile = null;
 
+const videoSizeLabels = [
+  { max: 250, label: "Compact" },
+  { max: 300, label: "Medium" },
+  { max: 340, label: "Large" },
+  { max: Infinity, label: "XL" }
+];
 
 function setActiveSection(tab) {
   Object.entries(sections).forEach(([key, section]) => {
@@ -80,6 +94,15 @@ function buildCameraTile(camera) {
   speaker.innerHTML = getSpeakerIcon(isLiveMuted || activeAudioCamera !== camera.id);
   speaker.classList.toggle("muted", isLiveMuted || activeAudioCamera !== camera.id);
 
+  const closeButton = document.createElement("button");
+  closeButton.className = "tile-close";
+  closeButton.type = "button";
+  closeButton.textContent = "Exit view";
+  closeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    exitInlineFullscreen();
+  });
+
   speaker.addEventListener("click", () => {
     toggleCameraAudio(camera.id);
   });
@@ -88,24 +111,38 @@ function buildCameraTile(camera) {
     if (event.target.closest(".speaker-toggle")) {
       return;
     }
-    requestFullscreen(video);
+    toggleInlineFullscreen(tile);
   });
 
-  tile.append(title, status, video, placeholder, speaker);
+  tile.append(title, status, video, placeholder, speaker, closeButton);
   return { tile, video, placeholder, status };
 }
 
-function requestFullscreen(element) {
-  if (!element || document.fullscreenElement) {
+function toggleInlineFullscreen(tile) {
+  if (!tile) {
     return;
   }
-  if (element.requestFullscreen) {
-    element.requestFullscreen().catch(() => {});
-  } else if (element.webkitRequestFullscreen) {
-    element.webkitRequestFullscreen();
-  } else if (element.msRequestFullscreen) {
-    element.msRequestFullscreen();
+  if (expandedTile === tile) {
+    exitInlineFullscreen();
+    return;
   }
+  if (expandedTile) {
+    expandedTile.classList.remove("expanded");
+  }
+  expandedTile = tile;
+  tile.classList.add("expanded");
+  fullscreenOverlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function exitInlineFullscreen() {
+  if (!expandedTile) {
+    return;
+  }
+  expandedTile.classList.remove("expanded");
+  expandedTile = null;
+  fullscreenOverlay.classList.add("hidden");
+  document.body.style.overflow = "";
 }
 
 function getStatusLabel(status) {
@@ -159,6 +196,33 @@ function toggleCameraAudio(cameraId) {
     isLiveMuted = false;
   }
   applyAudioState();
+}
+
+function setVideoSize(value) {
+  const size = Number.parseInt(value, 10);
+  if (!Number.isFinite(size)) {
+    return;
+  }
+  document.documentElement.style.setProperty("--tile-min-width", `${size}px`);
+  document.documentElement.style.setProperty("--tile-video-height", `${Math.round(size * 0.78)}px`);
+  const label = videoSizeLabels.find((item) => size <= item.max)?.label ?? "Custom";
+  videoSizeValue.textContent = label;
+  localStorage.setItem("videoSize", size.toString());
+}
+
+function initializeVideoSize() {
+  const stored = Number.parseInt(localStorage.getItem("videoSize"), 10);
+  const initial = Number.isFinite(stored) ? stored : Number.parseInt(videoSizeSlider.value, 10);
+  videoSizeSlider.value = initial;
+  setVideoSize(initial);
+}
+
+function updateSliderAvailability() {
+  const isMobile = window.matchMedia("(max-width: 720px), (pointer: coarse)").matches;
+  videoSizeSlider.disabled = isMobile;
+  videoSizeHint.textContent = isMobile
+    ? "Video size is locked on mobile."
+    : "Drag to resize the live tiles.";
 }
 
 function updateCameraStatus(placeholder, statusElement, health) {
@@ -508,6 +572,23 @@ rewindWindow.addEventListener("change", loadRewindStream);
 
 downloadButton.addEventListener("click", requestDownload);
 rewindDownloadButton.addEventListener("click", downloadLast30Seconds);
+settingsToggle.addEventListener("click", () => {
+  settingsMenu.classList.toggle("hidden");
+});
+settingsClose.addEventListener("click", () => {
+  settingsMenu.classList.add("hidden");
+});
+fullscreenOverlay.addEventListener("click", exitInlineFullscreen);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    exitInlineFullscreen();
+    settingsMenu.classList.add("hidden");
+  }
+});
+videoSizeSlider.addEventListener("input", (event) => {
+  setVideoSize(event.target.value);
+});
+window.addEventListener("resize", updateSliderAvailability);
 
 loadCameras();
 loadActivity();
@@ -515,6 +596,8 @@ setupActivityObserver();
 setActiveSection("live");
 setDefaultDownloadTime();
 setDefaultRewindTime();
+initializeVideoSize();
+updateSliderAvailability();
 
 setInterval(async () => {
   try {
