@@ -26,6 +26,8 @@ const videoSizeSlider = document.getElementById("videoSizeSlider");
 const videoSizeValue = document.getElementById("videoSizeValue");
 const videoSizeHint = document.getElementById("videoSizeHint");
 const fullscreenOverlay = document.getElementById("fullscreenOverlay");
+const siteTitle = document.getElementById("siteTitle");
+const appHeader = document.getElementById("appHeader");
 
 let cameras = [];
 let activeAudioCamera = "cam1";
@@ -68,6 +70,7 @@ function buildCameraTile(camera) {
   const tile = document.createElement("div");
   tile.className = "camera-tile";
   tile.dataset.camera = camera.id;
+  tile.dataset.state = camera.health?.status ?? "OFFLINE";
 
   const title = document.createElement("div");
   title.className = "camera-title";
@@ -109,6 +112,9 @@ function buildCameraTile(camera) {
 
   tile.addEventListener("click", (event) => {
     if (event.target.closest(".speaker-toggle")) {
+      return;
+    }
+    if (tile.dataset.state !== "ONLINE") {
       return;
     }
     toggleInlineFullscreen(tile);
@@ -220,13 +226,37 @@ function initializeVideoSize() {
 function updateSliderAvailability() {
   const isMobile = window.matchMedia("(max-width: 720px), (pointer: coarse)").matches;
   videoSizeSlider.disabled = isMobile;
-  videoSizeHint.textContent = isMobile
-    ? "Video size is locked on mobile."
-    : "Drag to resize the live tiles.";
+  videoSizeHint.textContent = isMobile ? "Video size is locked on mobile." : "";
+}
+
+async function loadUiConfig() {
+  try {
+    const response = await fetch("/api/config");
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    const ui = data.ui ?? {};
+    const titleText = typeof ui.title === "string" && ui.title.trim() ? ui.title.trim() : "Chickencams";
+    const showTitle = ui.showTitle !== false;
+    document.title = titleText;
+    if (siteTitle) {
+      siteTitle.textContent = titleText;
+    }
+    if (appHeader) {
+      appHeader.classList.toggle("hidden", !showTitle);
+    }
+  } catch (error) {
+    return;
+  }
 }
 
 function updateCameraStatus(placeholder, statusElement, health) {
   const state = health?.status ?? "OFFLINE";
+  const tile = statusElement.closest(".camera-tile");
+  if (tile) {
+    tile.dataset.state = state;
+  }
   statusElement.dataset.state = state;
   statusElement.textContent = getStatusLabel(state);
   placeholder.classList.toggle("hidden", state === "ONLINE");
@@ -323,8 +353,8 @@ function attachLiveStream(video, cameraId, placeholder, statusElement) {
       maxBufferLength: 300,
       maxMaxBufferLength: 300,
       maxLiveSyncPlaybackRate: 1.3,
-      liveSyncDurationCount: 3,
-      liveMaxLatencyDurationCount: 5
+      liveSyncDurationCount: 1,
+      liveMaxLatencyDurationCount: 2
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
@@ -598,6 +628,7 @@ setDefaultDownloadTime();
 setDefaultRewindTime();
 initializeVideoSize();
 updateSliderAvailability();
+loadUiConfig();
 
 setInterval(async () => {
   try {

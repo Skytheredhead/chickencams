@@ -2,6 +2,10 @@ const configList = document.getElementById("configList");
 const saveButton = document.getElementById("saveConfig");
 const status = document.getElementById("configStatus");
 const aggregatorHostInput = document.getElementById("aggregatorHost");
+const siteTitleInput = document.getElementById("siteTitleInput");
+const showTitleToggle = document.getElementById("showTitleToggle");
+const siteTitle = document.getElementById("siteTitle");
+const appHeader = document.getElementById("appHeader");
 let config = null;
 
 function parseSrtSource(source) {
@@ -74,6 +78,22 @@ async function loadConfig() {
     return;
   }
   config = await response.json();
+  const ui = config.ui ?? {};
+  const titleText = typeof ui.title === "string" && ui.title.trim() ? ui.title.trim() : "Chickencams";
+  const showTitle = ui.showTitle !== false;
+  if (siteTitleInput) {
+    siteTitleInput.value = titleText;
+  }
+  if (showTitleToggle) {
+    showTitleToggle.value = showTitle ? "true" : "false";
+  }
+  if (siteTitle) {
+    siteTitle.textContent = titleText;
+  }
+  document.title = titleText;
+  if (appHeader) {
+    appHeader.classList.toggle("hidden", !showTitle);
+  }
   const fallbackHost = config.cameras
     ?.map((camera) => parseSrtSource(camera.source)?.host)
     ?.find((host) => host);
@@ -111,6 +131,11 @@ async function saveConfig() {
     },
     body: JSON.stringify({
       ...config,
+      ui: {
+        ...(config.ui ?? {}),
+        title: siteTitleInput?.value ?? config.ui?.title ?? "Chickencams",
+        showTitle: showTitleToggle?.value !== "false"
+      },
       ingestHost: aggregatorHostInput?.value ?? config.ingestHost,
       cameras
     })

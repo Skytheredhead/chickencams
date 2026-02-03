@@ -29,6 +29,7 @@ function loadConfig() {
     hls: { ...base.hls, ...override.hls },
     storage: { ...base.storage, ...override.storage },
     health: { ...base.health, ...override.health },
+    ui: { ...base.ui, ...override.ui },
     ingestHost: normalizeString(override.ingestHost) || normalizeString(base.ingestHost) || "0.0.0.0",
     cameras: Array.isArray(override.cameras) ? override.cameras : base.cameras
   };
@@ -365,10 +366,15 @@ app.post("/api/config", requireApiToken, (req, res) => {
     res.status(400).json({ error: "Invalid camera payload." });
     return;
   }
+  const ui = payload.ui && typeof payload.ui === "object" ? payload.ui : config.ui;
   const ingestHost = normalizeString(payload.ingestHost) || config.ingestHost || "0.0.0.0";
   const updated = {
     ...config,
     ingestHost,
+    ui: {
+      ...config.ui,
+      ...ui
+    },
     cameras: cameras.map((camera, index) => ({
       id: typeof camera.id === "string" ? camera.id : config.cameras[index]?.id ?? `cam${index + 1}`,
       name: typeof camera.name === "string" ? camera.name : config.cameras[index]?.name ?? `Cam ${index + 1}`,

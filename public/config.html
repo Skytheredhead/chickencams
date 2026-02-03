@@ -8,11 +8,28 @@
   </head>
   <body>
     <main>
-      <header>
-        <h1>Chickencams Configuration</h1>
+      <header class="app-header" id="appHeader">
+        <h1 id="siteTitle">Chickencams</h1>
       </header>
 
       <section class="section">
+        <div class="card">
+          <h2>Site Title</h2>
+          <div class="form-grid">
+            <div class="field">
+              <label for="siteTitleInput">Title text</label>
+              <input id="siteTitleInput" type="text" placeholder="Chickencams" />
+            </div>
+            <div class="field">
+              <label for="showTitleToggle">Show title</label>
+              <select id="showTitleToggle">
+                <option value="true">Show</option>
+                <option value="false">Hide</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <h2>Camera Sources</h2>
           <p class="notice">Set the aggregator host and camera ports, then rename or enable cameras.</p>

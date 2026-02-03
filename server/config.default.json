@@ -18,6 +18,10 @@
   "storage": {
     "maxBackupGb": 50
   },
+  "ui": {
+    "title": "Chickencams",
+    "showTitle": true
+  },
   "cameras": [
     {
       "id": "cam1",
@@ -59,7 +63,7 @@
       {
         "name": "master",
         "resolution": "1280x720",
-        "fps": 30,
+        "fps": 10,
         "bitrateKbps": 2000,
         "maxrateKbps": 2200,
         "bufsizeKbps": 4000
@@ -67,7 +71,7 @@
       {
         "name": "high",
         "resolution": "1280x720",
-        "fps": 20,
+        "fps": 10,
         "bitrateKbps": 1000,
         "maxrateKbps": 1100,
         "bufsizeKbps": 2000
@@ -75,7 +79,7 @@
       {
         "name": "mid",
         "resolution": "1280x720",
-        "fps": 20,
+        "fps": 10,
         "bitrateKbps": 500,
         "maxrateKbps": 600,
         "bufsizeKbps": 1200
@@ -83,7 +87,7 @@
       {
         "name": "low",
         "resolution": "640x360",
-        "fps": 15,
+        "fps": 10,
         "bitrateKbps": 100,
         "maxrateKbps": 120,
         "bufsizeKbps": 300

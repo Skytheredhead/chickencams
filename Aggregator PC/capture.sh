@@ -5,11 +5,12 @@ CAMERA_ID=${1:?"camera id required (cam1-cam5)"}
 DEVICE=${2:?"video device required (/dev/video0)"}
 SERVER_HOST=${3:?"server hostname required"}
 SERVER_PORT=${4:?"server port required"}
+AUDIO_DEVICE=${5:-""}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR=${LOG_DIR:-"${SCRIPT_DIR}/logs"}
 LOG_FILE=${LOG_FILE:-"${LOG_DIR}/${CAMERA_ID}.log"}
-MAX_FPS=${MAX_FPS:-30}
+MAX_FPS=${MAX_FPS:-10}
 
 mkdir -p "${LOG_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -64,6 +65,9 @@ detect_camera_fps() {
 }
 
 INPUT_FPS=$(detect_camera_fps)
+if [[ -n "${AUDIO_DEVICE}" ]]; then
+  log "Audio device: ${AUDIO_DEVICE}"
+fi
 log "Capture settings: device=${DEVICE}, fps=${INPUT_FPS}, max_fps=${MAX_FPS}, server=${SERVER_HOST}:${SERVER_PORT}"
 if command -v v4l2-ctl >/dev/null 2>&1; then
   log "Device formats: $(v4l2-ctl --device "${DEVICE}" --list-formats-ext 2>/dev/null | tr '\n' ' ')"
@@ -72,6 +76,13 @@ fi
 PROGRESS_ARGS=()
 if [[ "${FFMPEG_PROGRESS:-}" == "1" ]]; then
   PROGRESS_ARGS=(-progress pipe:1 -nostats)
+fi
+
+AUDIO_INPUT_ARGS=()
+AUDIO_OUTPUT_ARGS=()
+if [[ -n "${AUDIO_DEVICE}" ]]; then
+  AUDIO_INPUT_ARGS=(-thread_queue_size 64 -f alsa -i "${AUDIO_DEVICE}")
+  AUDIO_OUTPUT_ARGS=(-c:a aac -b:a 128k -ac 2 -ar 48000 -map 0:v:0 -map 1:a:0)
 fi
 
 exec ffmpeg \
@@ -83,18 +94,20 @@ exec ffmpeg \
   -framerate "${INPUT_FPS}" \
   -video_size 1280x720 \
   -i "${DEVICE}" \
+  "${AUDIO_INPUT_ARGS[@]}" \
   -c:v libx264 \
   -preset veryfast \
   -tune zerolatency \
-  -b:v 2500k \
-  -maxrate 2800k \
-  -bufsize 4000k \
+  -b:v 3000k \
+  -maxrate 3300k \
+  -bufsize 6000k \
   -fps_mode drop \
   -max_delay 0 \
   -flush_packets 1 \
   -muxpreload 0 \
   -muxdelay 0 \
   -pix_fmt yuv420p \
+  "${AUDIO_OUTPUT_ARGS[@]}" \
   -f mpegts \
   "${PROGRESS_ARGS[@]}" \
   "srt://${SERVER_HOST}:${SERVER_PORT}?mode=caller&transtype=live&latency=50"

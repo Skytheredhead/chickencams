@@ -37,6 +37,23 @@ main {
   padding: 28px 28px 120px;
 }
 
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0.02em;
+}
+
+.app-header.hidden {
+  display: none;
+}
+
 .camera-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--tile-min-width), 1fr));
@@ -50,6 +67,11 @@ main {
   overflow: hidden;
   box-shadow: var(--shadow);
   border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.camera-tile[data-state="OFFLINE"],
+.camera-tile[data-state="DEGRADED"] {
+  cursor: not-allowed;
 }
 
 .camera-tile video {
@@ -403,7 +425,7 @@ main {
   width: 100%;
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), #8b5cf6, #f472b6);
+  background: var(--accent);
   outline: none;
   box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 0.4);
 }
