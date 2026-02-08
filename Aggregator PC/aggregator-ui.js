@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,14 +17,15 @@ const defaultRegistry = {
     serverPortBase: Number.parseInt(process.env.AGGREGATOR_SERVER_PORT ?? "9001", 10),
   },
   cameras: [
-    { id: "cam1", name: "Cam 1", enabled: true },
-    { id: "cam2", name: "Cam 2", enabled: true },
-    { id: "cam3", name: "Cam 3", enabled: true },
-    { id: "cam4", name: "Cam 4", enabled: true },
-    { id: "cam5", name: "Cam 5", enabled: true },
+    { id: "cam1", name: "Cam 1", enabled: true, audioDevice: "" },
+    { id: "cam2", name: "Cam 2", enabled: true, audioDevice: "" },
+    { id: "cam3", name: "Cam 3", enabled: true, audioDevice: "" },
+    { id: "cam4", name: "Cam 4", enabled: true, audioDevice: "" },
+    { id: "cam5", name: "Cam 5", enabled: true, audioDevice: "" },
   ],
 };
 const running = new Map();
+let lastStartAt = 0;
 
 app.use(express.urlencoded({ extended: false }));
 
@@ -68,6 +69,30 @@ const getVideoDevices = () => {
   return Array.from(devices).sort();
 };
 
+const getAudioDevices = () => {
+  const devices = new Set();
+  devices.add("default");
+  const probe = spawnSync("arecord", ["-L"], { encoding: "utf-8" });
+  if (probe.status === 0 && probe.stdout) {
+    probe.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.includes(" "))
+      .forEach((entry) => devices.add(entry));
+  }
+  const candidates = ["/dev/snd/by-id", "/dev/snd/by-path"];
+  candidates.forEach((dir) => {
+    try {
+      fs.readdirSync(dir).forEach((entry) => {
+        devices.add(path.join(dir, entry));
+      });
+    } catch {
+      return;
+    }
+  });
+  return Array.from(devices).filter((entry) => entry !== "null").sort();
+};
+
 const getLanAddresses = () => {
   const interfaces = os.networkInterfaces();
   return Object.values(interfaces)
@@ -88,6 +113,7 @@ const renderPage = (message = "") => {
   const registry = loadRegistry();
   const cameraList = registry.cameras;
   const devices = getVideoDevices();
+  const audioDevices = getAudioDevices();
   const sessions = Array.from(running.values());
   const addresses = getLanAddresses();
   const addressList = addresses.length ? addresses.join(", ") : "Unavailable";
@@ -212,6 +238,7 @@ const renderPage = (message = "") => {
                 <th>Camera ID</th>
                 <th>Video device</th>
                 <th>Server port</th>
+                <th>Audio device</th>
               </tr>
             </thead>
             <tbody>
@@ -234,13 +261,24 @@ const renderPage = (message = "") => {
                       <td>
                         <input name="serverPort_${camera.id}" id="serverPort_${camera.id}" value="${camera.serverPort ?? getDefaultPort(cameraList, camera.id, defaultPort)}" />
                       </td>
+                      <td>
+                        <select name="audio_${camera.id}" id="audio_${camera.id}">
+                          <option value="">No audio</option>
+                          ${audioDevices
+                            .map(
+                              (device) =>
+                                `<option value="${device}" ${device === camera.audioDevice ? "selected" : ""}>${device}</option>`
+                            )
+                            .join("")}
+                        </select>
+                      </td>
                     </tr>
                   `
                 )
                 .join("")}
             </tbody>
           </table>
-          <button type="submit">Start selected captures</button>
+          <button type="submit" id="startButton">Start selected captures</button>
         </form>
         ${message ? `<div class="message">${message}</div>` : ""}
       </div>
@@ -256,6 +294,7 @@ const renderPage = (message = "") => {
                   <th>Device</th>
                   <th>Server</th>
                   <th>PID</th>
+                  <th>Audio</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -268,6 +307,7 @@ const renderPage = (message = "") => {
                         <td>${session.device}</td>
                         <td>${session.serverHost}:${session.serverPort}</td>
                         <td>${session.pid}</td>
+                        <td>${session.audioDevice || "None"}</td>
                         <td>
                           <form class="inline" method="post" action="/stop">
                             <input type="hidden" name="cameraId" value="${session.cameraId}" />
@@ -284,6 +324,16 @@ const renderPage = (message = "") => {
           : `<p class="empty">No capture processes running.</p>`}
       </div>
     </div>
+    <script>
+      const form = document.querySelector('form[action="/start"]');
+      const button = document.getElementById("startButton");
+      if (form && button) {
+        form.addEventListener("submit", () => {
+          button.disabled = true;
+          button.textContent = "Starting...";
+        });
+      }
+    </script>
   </body>
 </html>`;
 };
@@ -294,6 +344,12 @@ app.get("/", (req, res) => {
 });
 
 app.post("/start", (req, res) => {
+  const now = Date.now();
+  if (now - lastStartAt < 2000) {
+    res.redirect("/?message=Capture+request+already+in+progress");
+    return;
+  }
+  lastStartAt = now;
   const { serverHost } = req.body;
   if (!serverHost) {
     res.redirect("/?message=Missing+server+host");
@@ -310,8 +366,10 @@ app.post("/start", (req, res) => {
     const cameraId = camera.id;
     const device = req.body[`device_${cameraId}`];
     const serverPort = req.body[`serverPort_${cameraId}`];
+    const audioDevice = req.body[`audio_${cameraId}`];
     camera.devicePath = device || "";
     camera.serverPort = serverPort || "";
+    camera.audioDevice = audioDevice || "";
 
     if (!device) {
       return;
@@ -327,7 +385,11 @@ app.post("/start", (req, res) => {
       running.delete(cameraId);
     }
 
-    const process = spawn(capturePath, [cameraId, device, serverHost, serverPort], {
+    const args = [cameraId, device, serverHost, serverPort];
+    if (audioDevice) {
+      args.push(audioDevice);
+    }
+    const process = spawn(capturePath, args, {
       stdio: "inherit",
     });
 
@@ -338,6 +400,7 @@ app.post("/start", (req, res) => {
       serverPort,
       pid: process.pid,
       process,
+      audioDevice: audioDevice || "",
     });
 
     process.on("exit", () => {

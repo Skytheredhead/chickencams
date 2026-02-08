@@ -4,91 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chickencams</title>
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="stylesheet" href="./app.css" />
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15"></script>
   </head>
   <body>
-    <main>
-      <section id="live" class="section">
-        <div class="camera-grid" id="cameraGrid"></div>
-      </section>
-
-      <section id="activity" class="section hidden">
-        <div class="card">
-          <h2>Recent Activity</h2>
-          <div class="activity-list" id="activityList"></div>
-          <p class="notice" id="activityStatus">Loading…</p>
+    <div class="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+      <header class="flex items-center justify-between px-6 py-5 bg-zinc-950/80 backdrop-blur border-b border-zinc-800">
+        <div class="flex items-center gap-6">
+          <h1 class="text-base font-semibold tracking-tight" id="siteTitle">Chickencams</h1>
+          <div class="hidden md:flex items-center gap-4 text-xs">
+            <span class="text-zinc-400">3D Printer: <span class="text-green-400">Online</span></span>
+            <span class="text-zinc-400">Chicken Coop: <span class="text-green-400">Online</span></span>
+            <span class="text-zinc-400">Server: <span class="text-yellow-400">High Load</span></span>
+            <span class="text-zinc-500">|</span>
+            <span class="text-zinc-400">Agg 1: <span class="text-green-400">Online</span></span>
+            <span class="text-zinc-400">Agg 2: <span class="text-green-400">Online</span></span>
+          </div>
         </div>
-      </section>
-
-      <section id="download" class="section hidden">
-        <div class="card">
-          <h2>Download Clips</h2>
-          <div class="form-grid">
-            <div class="field">
-              <label for="downloadStart">Start time</label>
-              <input type="datetime-local" id="downloadStart" />
-            </div>
-            <div class="field">
-              <label for="downloadDuration">Duration (seconds)</label>
-              <input type="number" id="downloadDuration" min="10" max="300" value="60" />
-            </div>
-            <div class="field">
-              <label for="downloadQuality">Quality</label>
-              <select id="downloadQuality">
-                <option value="high">High (visually lossless)</option>
-                <option value="med">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-          </div>
-          <div class="field" style="margin-top: 16px;">
-            <label>Camera selection</label>
-            <div class="checkbox-grid" id="downloadCameras"></div>
-          </div>
-          <button class="primary-button" id="downloadButton">Request download</button>
-          <p class="notice" id="downloadStatus"></p>
+        <div class="flex items-center gap-3">
+          <a class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" href="/config">
+            Settings
+          </a>
         </div>
-      </section>
+      </header>
 
-      <section id="rewind" class="section hidden">
-        <div class="card">
-          <h2>Rewind</h2>
-          <div class="form-grid">
-            <div class="field">
-              <label for="rewindCamera">Camera</label>
-              <select id="rewindCamera"></select>
-            </div>
-            <div class="field">
-              <label for="rewindTime">Timestamp</label>
-              <input type="datetime-local" id="rewindTime" />
-            </div>
-            <div class="field">
-              <label for="rewindWindow">Timeline range</label>
-              <select id="rewindWindow">
-                <option value="900">15 minutes</option>
-                <option value="3600" selected>1 hour</option>
-                <option value="18000">5 hours</option>
-                <option value="43200">12 hours</option>
-              </select>
-            </div>
+      <main class="grid grid-cols-1 gap-4 md:gap-5 p-6">
+        <div class="md:hidden bg-zinc-900/80 border border-zinc-800 rounded-lg p-4 text-xs space-y-2">
+          <div class="flex justify-between">
+            <span class="text-zinc-400">3D Printer</span>
+            <span class="text-green-400">Online</span>
           </div>
-          <div class="rewind-player">
-            <video id="rewindPlayer" controls></video>
+          <div class="flex justify-between">
+            <span class="text-zinc-400">Chicken Coop</span>
+            <span class="text-green-400">Online</span>
           </div>
-          <button class="secondary-button" id="rewindDownloadButton">Download last 30 seconds</button>
-          <p class="notice" id="rewindDownloadStatus"></p>
+          <div class="flex justify-between">
+            <span class="text-zinc-400">Server</span>
+            <span class="text-yellow-400">High Load</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-zinc-400">Aggregator 1</span>
+            <span class="text-green-400">Online</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-zinc-400">Aggregator 2</span>
+            <span class="text-green-400">Online</span>
+          </div>
         </div>
-      </section>
-    </main>
 
-    <div class="tabs-bottom">
-      <button class="bottom-tab active" data-tab="live">Live</button>
-      <button class="bottom-tab" data-tab="rewind">Rewind</button>
-      <button class="bottom-tab" data-tab="activity">Activity</button>
-      <button class="bottom-tab" data-tab="download">Download</button>
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5" id="cameraGrid"></section>
+      </main>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="./app.js"></script>
   </body>
 </html>

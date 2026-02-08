@@ -81,9 +81,9 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
     -b:v 2000k
     -maxrate 2200k
     -bufsize 4000k
-    -r 30
-    -g 30
-    -keyint_min 30
+    -r 10
+    -g 10
+    -keyint_min 10
     "${SC_THRESHOLD[@]}"
     -force_key_frames:v "expr:gte(t,n_forced*1)"
     "${AUDIO_CODEC[@]}"
@@ -95,7 +95,8 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
   )
 fi
 
-TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=32:fontcolor=white:box=1:boxcolor=0x00000099"
+TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-60:y=h-th-20:fontsize=32:fontcolor=white:box=1:boxcolor=0x00000099"
+IMAGE_FILTER="eq=contrast=1.15,unsharp=5:5:0.8:5:5:0.0"
 
 ffmpeg \
   -hide_banner \
@@ -107,13 +108,15 @@ ffmpeg \
   -flags low_delay \
   -err_detect ignore_err \
   -max_delay 0 \
+  -analyzeduration 0 \
+  -probesize 32 \
   -strict experimental \
   -i "${SOURCE_URL}" \
-  -filter_complex "[0:v]${TIMESTAMP_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
-  -map "[v1]" -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:0 "${PIX_FMT}" -b:v:0 2000k -maxrate:v:0 2200k -bufsize:v:0 4000k -r:v:0 30 -g:v:0 30 -keyint_min:v:0 30 "${SC_THRESHOLD[@]}" -force_key_frames:v:0 "expr:gte(t,n_forced*1)" \
-  -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:1 "${PIX_FMT}" -b:v:1 1000k -maxrate:v:1 1100k -bufsize:v:1 2000k -r:v:1 20 -g:v:1 20 -keyint_min:v:1 20 "${SC_THRESHOLD[@]}" -force_key_frames:v:1 "expr:gte(t,n_forced*1)" \
-  -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:2 "${PIX_FMT}" -b:v:2 500k -maxrate:v:2 600k -bufsize:v:2 1200k -r:v:2 20 -g:v:2 20 -keyint_min:v:2 20 "${SC_THRESHOLD[@]}" -force_key_frames:v:2 "expr:gte(t,n_forced*1)" \
-  -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:3 "${PIX_FMT}" -b:v:3 100k -maxrate:v:3 120k -bufsize:v:3 300k -r:v:3 15 -g:v:3 15 -keyint_min:v:3 15 "${SC_THRESHOLD[@]}" -force_key_frames:v:3 "expr:gte(t,n_forced*1)" \
+  -filter_complex "[0:v]${TIMESTAMP_FILTER},${IMAGE_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
+  -map "[v1]" -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:0 "${PIX_FMT}" -b:v:0 2000k -maxrate:v:0 2200k -bufsize:v:0 4000k -r:v:0 10 -g:v:0 10 -keyint_min:v:0 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:0 "expr:gte(t,n_forced*1)" \
+  -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:1 "${PIX_FMT}" -b:v:1 1000k -maxrate:v:1 1100k -bufsize:v:1 2000k -r:v:1 10 -g:v:1 10 -keyint_min:v:1 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:1 "expr:gte(t,n_forced*1)" \
+  -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:2 "${PIX_FMT}" -b:v:2 500k -maxrate:v:2 600k -bufsize:v:2 1200k -r:v:2 10 -g:v:2 10 -keyint_min:v:2 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:2 "expr:gte(t,n_forced*1)" \
+  -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:3 "${PIX_FMT}" -b:v:3 100k -maxrate:v:3 120k -bufsize:v:3 300k -r:v:3 10 -g:v:3 10 -keyint_min:v:3 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:3 "expr:gte(t,n_forced*1)" \
   "${AUDIO_MAP[@]}" \
   "${AUDIO_CODEC[@]}" \
   -f hls \

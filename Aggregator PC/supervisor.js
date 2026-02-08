@@ -120,7 +120,11 @@ function startProcess(camera, defaults, index) {
   const serverHost = camera.serverHost ?? defaults.serverHost;
   const basePort = Number.isFinite(defaults.serverPortBase) ? defaults.serverPortBase : 9001;
   const serverPort = camera.serverPort ?? basePort + (Number.isFinite(index) ? index : 0);
-  const child = spawn(capturePath, [camera.id, devicePath, serverHost, String(serverPort)], {
+  const args = [camera.id, devicePath, serverHost, String(serverPort)];
+  if (camera.audioDevice) {
+    args.push(camera.audioDevice);
+  }
+  const child = spawn(capturePath, args, {
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, FFMPEG_PROGRESS: "1" },
   });
