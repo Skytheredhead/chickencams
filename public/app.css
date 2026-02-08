@@ -18,7 +18,6 @@
   --placeholder-bg: linear-gradient(135deg, rgba(34, 42, 61, 0.9), rgba(16, 22, 34, 0.95));
   --placeholder-text: #9aa6bf;
   --tile-min-width: 280px;
-  --tile-video-height: 220px;
 }
 
 * {
@@ -76,7 +75,8 @@ main {
 
 .camera-tile video {
   width: 100%;
-  height: var(--tile-video-height);
+  height: auto;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   display: block;
   background: #0b0e14;
@@ -92,6 +92,7 @@ main {
 
 .camera-tile.expanded video {
   height: 100%;
+  aspect-ratio: auto;
 }
 
 .camera-tile.expanded .camera-title,
@@ -368,6 +369,7 @@ main {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
+  display: block;
 }
 
 .settings-menu {

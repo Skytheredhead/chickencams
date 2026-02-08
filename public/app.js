@@ -23,7 +23,6 @@ const settingsToggle = document.getElementById("settingsToggle");
 const settingsMenu = document.getElementById("settingsMenu");
 const settingsClose = document.getElementById("settingsClose");
 const videoSizeSlider = document.getElementById("videoSizeSlider");
-const videoSizeValue = document.getElementById("videoSizeValue");
 const videoSizeHint = document.getElementById("videoSizeHint");
 const fullscreenOverlay = document.getElementById("fullscreenOverlay");
 const siteTitle = document.getElementById("siteTitle");
@@ -37,13 +36,6 @@ let activityLoading = false;
 let activityDone = false;
 let rewindHls = null;
 let expandedTile = null;
-
-const videoSizeLabels = [
-  { max: 250, label: "Compact" },
-  { max: 300, label: "Medium" },
-  { max: 340, label: "Large" },
-  { max: Infinity, label: "XL" }
-];
 
 function setActiveSection(tab) {
   Object.entries(sections).forEach(([key, section]) => {
@@ -210,9 +202,6 @@ function setVideoSize(value) {
     return;
   }
   document.documentElement.style.setProperty("--tile-min-width", `${size}px`);
-  document.documentElement.style.setProperty("--tile-video-height", `${Math.round(size * 0.78)}px`);
-  const label = videoSizeLabels.find((item) => size <= item.max)?.label ?? "Custom";
-  videoSizeValue.textContent = label;
   localStorage.setItem("videoSize", size.toString());
 }
 
