@@ -5,14 +5,13 @@ const aggregatorHostInput = document.getElementById("aggregatorHost");
 const siteTitleInput = document.getElementById("siteTitleInput");
 const showTitleToggle = document.getElementById("showTitleToggle");
 const siteTitle = document.getElementById("siteTitle");
-const appHeader = document.getElementById("appHeader");
 let config = null;
 
 function parseSrtSource(source) {
   if (typeof source !== "string") {
     return null;
   }
-  const match = source.match(/^srt:\\/\\/([^:/?]+)(?::(\\d+))?/i);
+  const match = source.match(/^srt:\/\/([^:/?]+)(?::(\d+))?/i);
   if (!match) {
     return null;
   }
@@ -21,53 +20,57 @@ function parseSrtSource(source) {
     port: match[2] ? Number.parseInt(match[2], 10) : null
   };
 }
+
 function createCameraRow(camera) {
   const row = document.createElement("div");
-  row.className = "activity-item";
+  row.className = "config-row";
 
-  const meta = document.createElement("div");
-  meta.className = "activity-meta";
-
-  const title = document.createElement("strong");
-  title.textContent = camera.id;
+  const header = document.createElement("div");
+  header.className = "config-row-title";
+  header.textContent = camera.id;
 
   const nameField = document.createElement("div");
-  nameField.className = "field";
+  nameField.className = "config-field";
   const nameLabel = document.createElement("label");
+  nameLabel.className = "text-xs text-zinc-400";
   nameLabel.textContent = "Camera name";
   const nameInput = document.createElement("input");
+  nameInput.className = "config-input";
   nameInput.type = "text";
   nameInput.value = camera.name;
   nameInput.dataset.camera = camera.id;
   nameInput.dataset.field = "name";
   nameField.append(nameLabel, nameInput);
 
+  const enabledField = document.createElement("div");
+  enabledField.className = "config-field";
   const enabledLabel = document.createElement("label");
-  enabledLabel.textContent = "Enabled";
-  enabledLabel.style.display = "flex";
-  enabledLabel.style.alignItems = "center";
-  enabledLabel.style.gap = "8px";
+  enabledLabel.className = "config-checkbox";
   const enabled = document.createElement("input");
   enabled.type = "checkbox";
   enabled.checked = camera.enabled;
   enabled.dataset.camera = camera.id;
-  enabledLabel.prepend(enabled);
+  const enabledText = document.createElement("span");
+  enabledText.textContent = "Enabled";
+  enabledLabel.append(enabled, enabledText);
+  enabledField.append(enabledLabel);
 
-  const sourceField = document.createElement("div");
-  sourceField.className = "field";
-  const sourceLabel = document.createElement("label");
-  sourceLabel.textContent = "Port";
-  const source = document.createElement("input");
-  source.type = "number";
-  source.min = "1";
-  source.max = "65535";
-  source.value = camera.port ?? "";
-  source.dataset.camera = camera.id;
-  source.dataset.field = "port";
-  sourceField.append(sourceLabel, source);
+  const portField = document.createElement("div");
+  portField.className = "config-field";
+  const portLabel = document.createElement("label");
+  portLabel.className = "text-xs text-zinc-400";
+  portLabel.textContent = "Port";
+  const portInput = document.createElement("input");
+  portInput.className = "config-input";
+  portInput.type = "number";
+  portInput.min = "1";
+  portInput.max = "65535";
+  portInput.value = camera.port ?? "";
+  portInput.dataset.camera = camera.id;
+  portInput.dataset.field = "port";
+  portField.append(portLabel, portInput);
 
-  meta.append(title, nameField, enabledLabel, sourceField);
-  row.append(meta);
+  row.append(header, nameField, enabledField, portField);
   return row;
 }
 
@@ -80,20 +83,16 @@ async function loadConfig() {
   config = await response.json();
   const ui = config.ui ?? {};
   const titleText = typeof ui.title === "string" && ui.title.trim() ? ui.title.trim() : "Chickencams";
-  const showTitle = ui.showTitle !== false;
   if (siteTitleInput) {
     siteTitleInput.value = titleText;
   }
   if (showTitleToggle) {
-    showTitleToggle.value = showTitle ? "true" : "false";
+    showTitleToggle.value = ui.showTitle === false ? "false" : "true";
   }
   if (siteTitle) {
     siteTitle.textContent = titleText;
   }
   document.title = titleText;
-  if (appHeader) {
-    appHeader.classList.toggle("hidden", !showTitle);
-  }
   const fallbackHost = config.cameras
     ?.map((camera) => parseSrtSource(camera.source)?.host)
     ?.find((host) => host);

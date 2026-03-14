@@ -95,7 +95,7 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
   )
 fi
 
-TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-20:y=h-th-20:fontsize=32:fontcolor=white:box=1:boxcolor=0x00000099"
+TIMESTAMP_FILTER="drawtext=fontfile=${FONT_PATH}:text='%{localtime\\:%Y-%m-%d %H.%M.%S}':x=w-tw-60:y=h-th-20:fontsize=32:fontcolor=white:box=1:boxcolor=0x00000099"
 IMAGE_FILTER="eq=contrast=1.15,unsharp=5:5:0.8:5:5:0.0"
 
 ffmpeg \

@@ -82,6 +82,17 @@ app.use(express.json());
 
 const publicDir = path.join(rootDir, "public");
 app.use(express.static(publicDir));
+app.use((req, res, next) => {
+  if (req.method !== "GET" || req.path === "/") {
+    next();
+    return;
+  }
+  if (!req.path.includes(".") && !req.path.startsWith("/api")) {
+    res.sendFile(path.join(publicDir, "index.html"));
+    return;
+  }
+  next();
+});
 
 const streamsRoot = path.resolve(rootDir, config.paths.streamsRoot);
 const recordingsRoot = path.resolve(rootDir, config.paths.recordingsRoot);
