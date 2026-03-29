@@ -73,19 +73,56 @@ const saveRegistry = (registry) => {
 };
 
 const getVideoDevices = () => {
-  const devices = new Set();
+  const entries = [];
   const candidates = ["/dev/v4l/by-id", "/dev/v4l/by-path"];
   candidates.forEach((dir) => {
     try {
       fs.readdirSync(dir).forEach((entry) => {
         const fullPath = path.join(dir, entry);
-        devices.add(fullPath);
+        entries.push({
+          fullPath,
+          realPath: fs.existsSync(fullPath) ? fs.realpathSync(fullPath) : fullPath,
+          isById: dir.endsWith("/by-id"),
+          isIndex0: entry.endsWith("video-index0"),
+          physicalKey: entry
+            .replace(/-video-index\d+$/, "")
+            .replace(/-usbv\d+-/g, "-usb-"),
+        });
       });
     } catch {
       return;
     }
   });
-  return Array.from(devices).sort();
+
+  // Collapse duplicate aliases (by-id and by-path) that point at the same video node.
+  const preferredByNode = new Map();
+  entries.forEach((entry) => {
+    const existing = preferredByNode.get(entry.realPath);
+    if (
+      !existing ||
+      (entry.isById && !existing.isById) ||
+      (entry.isIndex0 && !existing.isIndex0)
+    ) {
+      preferredByNode.set(entry.realPath, entry);
+    }
+  });
+
+  // Each webcam often exposes index0 and index1; prefer index0 as the actual capture node.
+  const preferredByCamera = new Map();
+  preferredByNode.forEach((entry) => {
+    const existing = preferredByCamera.get(entry.physicalKey);
+    if (
+      !existing ||
+      (entry.isIndex0 && !existing.isIndex0) ||
+      (entry.isById && !existing.isById)
+    ) {
+      preferredByCamera.set(entry.physicalKey, entry);
+    }
+  });
+
+  return Array.from(preferredByCamera.values())
+    .map((entry) => entry.fullPath)
+    .sort();
 };
 
 const getAudioDevices = () => {
@@ -237,6 +274,7 @@ const renderPage = (message = "") => {
       <div class="card">
         <h2>Start captures</h2>
         <p>Select up to five inputs (leave as N/A to skip). Default ports increment from ${defaultPort}.</p>
+        <p class="empty">Showing one primary video node per camera. If Linux creates extra index1 or by-path aliases, they are hidden here.</p>
         <form method="post" action="/start">
           <div class="grid">
             <div>

@@ -78,9 +78,8 @@ function updateCameraStatus(card, video, placeholder, health) {
   const state = health?.status ?? "OFFLINE";
   card.dataset.state = state;
   card.classList.toggle("offline", state === "OFFLINE");
-  card.classList.toggle("hidden", state === "OFFLINE");
   if (state === "OFFLINE") {
-    hidePlaceholder(placeholder);
+    showPlaceholder(placeholder, "No signal");
     return;
   }
   if (state === "DEGRADED" && !isStreamRendering(video)) {
@@ -99,9 +98,8 @@ function updateCameraMeta(meta, health) {
 }
 
 function updateEmptyState() {
-  const activeCards = cameraGrid.querySelectorAll(".camera-card:not(.hidden)");
   if (cameraEmptyState) {
-    cameraEmptyState.classList.toggle("hidden", activeCards.length > 0);
+    cameraEmptyState.classList.toggle("hidden", cameraCards.size > 0);
   }
 }
 
