@@ -26,26 +26,36 @@ log() {
 
 log "Logging to ${LOG_FILE}"
 
+LISTENER_PREFLIGHT_MODE=${LISTENER_PREFLIGHT_MODE:-warn}
+
 if ! command -v nc >/dev/null 2>&1; then
-  log "Error: nc (netcat) is required to preflight the server listener check."
-  exit 1
-fi
-
-log "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
-LISTENER_RETRY_COUNT=${LISTENER_RETRY_COUNT:-12}
-LISTENER_RETRY_DELAY=${LISTENER_RETRY_DELAY:-5}
-
-listener_attempt=0
-until nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; do
-  listener_attempt=$((listener_attempt + 1))
-  if (( listener_attempt > LISTENER_RETRY_COUNT )); then
-    log "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}."
-    log "Hint: Ensure the server is running and listening on that port before starting capture."
+  if [[ "${LISTENER_PREFLIGHT_MODE}" == "strict" ]]; then
+    log "Error: nc (netcat) is required for strict listener preflight checks."
     exit 1
   fi
-  log "Listener not ready yet. Retrying in ${LISTENER_RETRY_DELAY}s... (${listener_attempt}/${LISTENER_RETRY_COUNT})"
-  sleep "${LISTENER_RETRY_DELAY}"
-done
+  log "Warning: nc (netcat) is not installed; skipping listener preflight."
+else
+  log "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
+  LISTENER_RETRY_COUNT=${LISTENER_RETRY_COUNT:-12}
+  LISTENER_RETRY_DELAY=${LISTENER_RETRY_DELAY:-5}
+
+  listener_attempt=0
+  until nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; do
+    listener_attempt=$((listener_attempt + 1))
+    if (( listener_attempt > LISTENER_RETRY_COUNT )); then
+      if [[ "${LISTENER_PREFLIGHT_MODE}" == "strict" ]]; then
+        log "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}."
+        log "Hint: Ensure the server is running and listening on that port before starting capture."
+        exit 1
+      fi
+      log "Warning: Listener probe failed for ${SERVER_HOST}:${SERVER_PORT}, but continuing anyway."
+      log "Note: UDP netcat checks can false-negative against real SRT listeners. Set LISTENER_PREFLIGHT_MODE=strict to block on probe failure."
+      break
+    fi
+    log "Listener not ready yet. Retrying in ${LISTENER_RETRY_DELAY}s... (${listener_attempt}/${LISTENER_RETRY_COUNT})"
+    sleep "${LISTENER_RETRY_DELAY}"
+  done
+fi
 
 if [[ "${DEVICE}" =~ ^/dev/video[0-9]+$ ]]; then
   log "Error: Use a stable /dev/v4l/by-id or /dev/v4l/by-path symlink instead of ${DEVICE}."
