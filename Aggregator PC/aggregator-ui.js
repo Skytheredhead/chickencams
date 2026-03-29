@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number.parseInt(process.env.AGGREGATOR_UI_PORT ?? "3010", 10);
 const registryPath = path.join(__dirname, "registry.json");
+const faviconDataUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23000'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-size='40' font-weight='700' font-family='Arial%2C%20Helvetica%2C%20sans-serif' fill='%23fff'%3EA%3C/text%3E%3C/svg%3E";
 const defaultRegistry = {
   defaults: {
     serverHost: process.env.AGGREGATOR_SERVER_HOST ?? "chickens.local",
@@ -28,16 +29,10 @@ const running = new Map();
 let lastStartAt = 0;
 
 function stopCaptureProcess(session) {
-  if (!session?.process) {
-    return;
-  }
+  if (!session?.process) return;
   try {
     if (Number.isFinite(session.process.pid)) {
-      try {
-        process.kill(-session.process.pid, "SIGTERM");
-      } catch {
-        session.process.kill("SIGTERM");
-      }
+      try { process.kill(-session.process.pid, "SIGTERM"); } catch { session.process.kill("SIGTERM"); }
       return;
     }
     session.process.kill("SIGTERM");
@@ -50,9 +45,7 @@ app.use(express.urlencoded({ extended: false }));
 
 const loadRegistry = () => {
   try {
-    if (!fs.existsSync(registryPath)) {
-      return defaultRegistry;
-    }
+    if (!fs.existsSync(registryPath)) return defaultRegistry;
     const registry = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
     return {
       defaults: { ...defaultRegistry.defaults, ...(registry.defaults ?? {}) },
@@ -65,25 +58,14 @@ const loadRegistry = () => {
 };
 
 const saveRegistry = (registry) => {
-  try {
-    fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf-8");
-  } catch (error) {
-    console.warn("Failed to write registry.json.", error);
-  }
+  try { fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf-8"); }
+  catch (error) { console.warn("Failed to write registry.json.", error); }
 };
 
 const getVideoDevices = () => {
   const devices = new Set();
-  const candidates = ["/dev/v4l/by-id", "/dev/v4l/by-path"];
-  candidates.forEach((dir) => {
-    try {
-      fs.readdirSync(dir).forEach((entry) => {
-        const fullPath = path.join(dir, entry);
-        devices.add(fullPath);
-      });
-    } catch {
-      return;
-    }
+  ["/dev/v4l/by-id", "/dev/v4l/by-path"].forEach((dir) => {
+    try { fs.readdirSync(dir).forEach((entry) => devices.add(path.join(dir, entry))); } catch { }
   });
   return Array.from(devices).sort();
 };
@@ -93,308 +75,367 @@ const getAudioDevices = () => {
   devices.add("default");
   const probe = spawnSync("arecord", ["-L"], { encoding: "utf-8" });
   if (probe.status === 0 && probe.stdout) {
-    probe.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line && !line.includes(" "))
-      .forEach((entry) => devices.add(entry));
+    probe.stdout.split("\n").map(l => l.trim()).filter(l => l && !l.includes(" ")).forEach(e => devices.add(e));
   }
-  const candidates = ["/dev/snd/by-id", "/dev/snd/by-path"];
-  candidates.forEach((dir) => {
-    try {
-      fs.readdirSync(dir).forEach((entry) => {
-        devices.add(path.join(dir, entry));
-      });
-    } catch {
-      return;
-    }
+  ["/dev/snd/by-id", "/dev/snd/by-path"].forEach((dir) => {
+    try { fs.readdirSync(dir).forEach((entry) => devices.add(path.join(dir, entry))); } catch { }
   });
-  return Array.from(devices).filter((entry) => entry !== "null").sort();
+  return Array.from(devices).filter(e => e !== "null").sort();
 };
 
 const getLanAddresses = () => {
   const interfaces = os.networkInterfaces();
-  return Object.values(interfaces)
-    .flat()
-    .filter((entry) => entry && entry.family === "IPv4" && !entry.internal)
-    .map((entry) => entry.address);
+  return Object.values(interfaces).flat().filter(e => e && e.family === "IPv4" && !e.internal).map(e => e.address);
 };
 
 const getDefaultPort = (cameraList, cameraId, basePort) => {
-  const index = cameraList.findIndex((camera) => camera.id === cameraId);
-  if (index === -1) {
-    return basePort;
-  }
-  return basePort + index;
+  const index = cameraList.findIndex(c => c.id === cameraId);
+  return index === -1 ? basePort : basePort + index;
 };
 
 const renderPage = (message = "") => {
-  const registry = loadRegistry();
-  const cameraList = registry.cameras;
-  const devices = getVideoDevices();
-  const audioDevices = getAudioDevices();
-  const sessions = Array.from(running.values());
-  const addresses = getLanAddresses();
-  const addressList = addresses.length ? addresses.join(", ") : "Unavailable";
+  const registry      = loadRegistry();
+  const cameraList    = registry.cameras;
+  const devices       = getVideoDevices();
+  const audioDevices  = getAudioDevices();
+  const sessions      = Array.from(running.values());
+  const addresses     = getLanAddresses();
+  const addressList   = addresses.length ? addresses.join(", ") : "Unavailable";
   const defaultServer = registry.defaults.serverHost;
-  const defaultPort = registry.defaults.serverPortBase;
+  const defaultPort   = registry.defaults.serverPortBase;
 
   return `<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chickencams Aggregator</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        font-family: system-ui, sans-serif;
-        background: #0f1115;
-        color: #f4f4f7;
-      }
-      body {
-        margin: 0;
-        padding: 24px;
-      }
-      .container {
-        max-width: 880px;
-        margin: 0 auto;
-      }
-      h1 {
-        font-size: 28px;
-        margin-bottom: 8px;
-      }
-      .card {
-        background: rgba(255, 255, 255, 0.06);
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 20px;
-      }
-      label {
-        display: block;
-        font-size: 14px;
-        margin-bottom: 6px;
-        opacity: 0.8;
-      }
-      input, select {
-        width: 100%;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: rgba(0, 0, 0, 0.3);
-        color: inherit;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px;
-      }
-      button {
-        margin-top: 12px;
-        padding: 10px 16px;
-        border-radius: 10px;
-        border: none;
-        cursor: pointer;
-        background: #2f6fed;
-        color: white;
-        font-weight: 600;
-      }
-      .secondary {
-        background: #39404d;
-      }
-      .message {
-        margin-top: 12px;
-        color: #9ae6b4;
-      }
-      .empty {
-        opacity: 0.7;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 8px;
-      }
-      th, td {
-        text-align: left;
-        padding: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      }
-      form.inline {
-        display: inline;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Chickencams Aggregator</h1>
-      <p>Start USB camera capture streams and send them to the Chickencams server.</p>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chickencams Aggregator</title>
+  <link rel="icon" type="image/svg+xml" href="${faviconDataUrl}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      <div class="card">
-        <h2>Aggregator IPs</h2>
-        <p>${addressList}</p>
-      </div>
+    :root {
+      --bg:           #07070a;
+      --surface:      #0f0f14;
+      --border:       #1c1c24;
+      --border-hi:    #2a2a36;
+      --text:         #e8e8f0;
+      --muted:        #5a5a72;
+      --subtle:       #1e1e28;
+      --accent:       #3b82f6;
+      color-scheme: dark;
+    }
 
-      <div class="card">
-        <h2>Start captures</h2>
-        <p>Select up to five inputs (leave as N/A to skip). Default ports increment from ${defaultPort}.</p>
-        <form method="post" action="/start">
-          <div class="grid">
-            <div>
-              <label for="serverHost">Server IP or hostname</label>
-              <input
-                name="serverHost"
-                id="serverHost"
-                value="${defaultServer}"
-                placeholder="192.168.1.50"
-                required
-              />
-              <small class="empty">Tip: use the server's LAN IP if chickens.local doesn't resolve.</small>
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 24px;
+      height: 52px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .site-name {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .address-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border-hi);
+      border-radius: 999px;
+      padding: 3px 12px;
+    }
+
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-header h2 { font-size: 13px; font-weight: 600; }
+
+    .card-body { padding: 20px; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+
+    .field label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 7px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+
+    input:focus, select:focus { border-color: var(--accent); }
+
+    .server-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .server-row .field { width: 240px; flex-shrink: 0; }
+
+    .server-row small {
+      font-size: 11px;
+      color: var(--muted);
+      padding-bottom: 9px;
+      line-height: 1.5;
+    }
+
+    .cam-table { width: 100%; border-collapse: collapse; }
+
+    .cam-table thead tr { border-bottom: 1px solid var(--border); }
+
+    .cam-table th {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      text-align: left;
+      padding: 0 10px 10px 0;
+    }
+
+    .cam-table td {
+      padding: 8px 10px 8px 0;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cam-table td:first-child {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      width: 60px;
+    }
+
+    .cam-table tbody tr:last-child td { border-bottom: none; }
+
+    .card-actions {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border-hi);
+      background: var(--subtle);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover { background: var(--border-hi); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #2563eb; border-color: #2563eb; }
+
+    .btn-danger { background: transparent; border-color: var(--border-hi); color: #f87171; }
+    .btn-danger:hover { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.3); }
+
+    .message { font-size: 12px; color: #6ee7b7; }
+    .empty { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="site-name">Chickencams Aggregator</span>
+    <span class="address-pill">${addressList}</span>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="card-header"><h2>Start captures</h2></div>
+      <div class="card-body">
+        <form method="post" action="/start" id="startForm">
+          <div class="server-row">
+            <div class="field">
+              <label for="serverHost">Server IP / hostname</label>
+              <input name="serverHost" id="serverHost" value="${defaultServer}" placeholder="192.168.1.50" required />
             </div>
+            <small>Ports increment from ${defaultPort}.<br>Use LAN IP if .local doesn't resolve.</small>
           </div>
-          <table>
+
+          <table class="cam-table">
             <thead>
               <tr>
-                <th>Camera ID</th>
+                <th>Camera</th>
                 <th>Video device</th>
-                <th>Server port</th>
+                <th style="width:100px">Port</th>
                 <th>Audio device</th>
               </tr>
             </thead>
             <tbody>
-              ${cameraList
-                .map(
-                  (camera) => `
-                    <tr>
-                      <td>${camera.id}</td>
-                      <td>
-                        <select name="device_${camera.id}" id="device_${camera.id}">
-                          <option value="">N/A</option>
-                          ${devices
-                            .map(
-                              (device) =>
-                                `<option value="${device}" ${device === camera.devicePath ? "selected" : ""}>${device}</option>`
-                            )
-                            .join("")}
-                        </select>
-                      </td>
-                      <td>
-                        <input name="serverPort_${camera.id}" id="serverPort_${camera.id}" value="${camera.serverPort ?? getDefaultPort(cameraList, camera.id, defaultPort)}" />
-                      </td>
-                      <td>
-                        <select name="audio_${camera.id}" id="audio_${camera.id}">
-                          <option value="">No audio</option>
-                          ${audioDevices
-                            .map(
-                              (device) =>
-                                `<option value="${device}" ${device === camera.audioDevice ? "selected" : ""}>${device}</option>`
-                            )
-                            .join("")}
-                        </select>
-                      </td>
-                    </tr>
-                  `
-                )
-                .join("")}
+              ${cameraList.map(camera => `
+              <tr>
+                <td>${camera.id}</td>
+                <td>
+                  <select name="device_${camera.id}">
+                    <option value="">N/A</option>
+                    ${devices.map(d => `<option value="${d}"${d === camera.devicePath ? " selected" : ""}>${d}</option>`).join("")}
+                  </select>
+                </td>
+                <td>
+                  <input name="serverPort_${camera.id}" type="number" value="${camera.serverPort ?? getDefaultPort(cameraList, camera.id, defaultPort)}" />
+                </td>
+                <td>
+                  <select name="audio_${camera.id}">
+                    <option value="">No audio</option>
+                    ${audioDevices.map(d => `<option value="${d}"${d === camera.audioDevice ? " selected" : ""}>${d}</option>`).join("")}
+                  </select>
+                </td>
+              </tr>`).join("")}
             </tbody>
           </table>
-          <button type="submit" id="startButton">Start selected captures</button>
         </form>
-        ${message ? `<div class="message">${message}</div>` : ""}
       </div>
-
-      <div class="card">
-        <h2>Active captures</h2>
-        ${sessions.length
-          ? `
-            <table>
-              <thead>
-                <tr>
-                  <th>Camera ID</th>
-                  <th>Device</th>
-                  <th>Server</th>
-                  <th>PID</th>
-                  <th>Audio</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${sessions
-                  .map(
-                    (session) => `
-                      <tr>
-                        <td>${session.cameraId}</td>
-                        <td>${session.device}</td>
-                        <td>${session.serverHost}:${session.serverPort}</td>
-                        <td>${session.pid}</td>
-                        <td>${session.audioDevice || "None"}</td>
-                        <td>
-                          <form class="inline" method="post" action="/stop">
-                            <input type="hidden" name="cameraId" value="${session.cameraId}" />
-                            <button class="secondary" type="submit">Stop</button>
-                          </form>
-                        </td>
-                      </tr>
-                    `
-                  )
-                  .join("")}
-              </tbody>
-            </table>
-          `
-          : `<p class="empty">No capture processes running.</p>`}
+      <div class="card-actions">
+        <button class="btn btn-primary" type="submit" form="startForm" id="startButton">Start selected</button>
+        ${message ? `<span class="message">${message}</span>` : ""}
       </div>
     </div>
-    <script>
-      const form = document.querySelector('form[action="/start"]');
-      const button = document.getElementById("startButton");
-      const serverHostInput = document.getElementById("serverHost");
-      const heartbeatHostname = ${JSON.stringify(os.hostname())};
-      const heartbeatAddresses = ${JSON.stringify(addresses)};
-      const heartbeatIntervalMs = 15000;
 
-      function getHeartbeatServerHost() {
-        return (serverHostInput?.value || "").trim();
-      }
+    <div class="card">
+      <div class="card-header"><h2>Active captures</h2></div>
+      <div class="card-body">
+        ${sessions.length ? `
+        <table class="cam-table">
+          <thead>
+            <tr>
+              <th>Camera</th>
+              <th>Device</th>
+              <th>Server</th>
+              <th>PID</th>
+              <th>Audio</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sessions.map(s => `
+            <tr>
+              <td>${s.cameraId}</td>
+              <td>${s.device}</td>
+              <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${s.serverHost}:${s.serverPort}</td>
+              <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${s.pid}</td>
+              <td>${s.audioDevice || "—"}</td>
+              <td>
+                <form method="post" action="/stop" style="display:inline">
+                  <input type="hidden" name="cameraId" value="${s.cameraId}" />
+                  <button class="btn btn-danger" type="submit">Stop</button>
+                </form>
+              </td>
+            </tr>`).join("")}
+          </tbody>
+        </table>` : `<p class="empty">No capture processes running.</p>`}
+      </div>
+    </div>
+  </main>
 
-      function heartbeatUrl(serverHost) {
-        return "http://" + serverHost + ":7979/api/aggregators/heartbeat";
-      }
+  <script>
+    const form            = document.getElementById("startForm");
+    const button          = document.getElementById("startButton");
+    const serverHostInput = document.getElementById("serverHost");
+    const heartbeatHostname  = ${JSON.stringify(os.hostname())};
+    const heartbeatAddresses = ${JSON.stringify(addresses)};
+    const heartbeatIntervalMs = 15000;
 
-      async function sendHeartbeat() {
-        const serverHost = getHeartbeatServerHost();
-        if (!serverHost) {
-          return;
-        }
-        try {
-          await fetch(heartbeatUrl(serverHost), {
-            method: "POST",
-            mode: "cors",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              id: heartbeatHostname + ":" + (heartbeatAddresses[0] || "unknown"),
-              hostname: heartbeatHostname,
-              ip: heartbeatAddresses[0] || "",
-              addresses: heartbeatAddresses,
-            }),
-          });
-        } catch (error) {
-          return;
-        }
-      }
+    function getHeartbeatServerHost() {
+      return (serverHostInput?.value || "").trim();
+    }
 
-      if (form && button) {
-        form.addEventListener("submit", () => {
-          button.disabled = true;
-          button.textContent = "Starting...";
-          sendHeartbeat();
+    async function sendHeartbeat() {
+      const serverHost = getHeartbeatServerHost();
+      if (!serverHost) return;
+      try {
+        await fetch("http://" + serverHost + ":7979/api/aggregators/heartbeat", {
+          method: "POST",
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: heartbeatHostname + ":" + (heartbeatAddresses[0] || "unknown"),
+            hostname: heartbeatHostname,
+            ip: heartbeatAddresses[0] || "",
+            addresses: heartbeatAddresses,
+          }),
         });
-      }
+      } catch { }
+    }
 
-      sendHeartbeat();
-      setInterval(sendHeartbeat, heartbeatIntervalMs);
-    </script>
-  </body>
+    if (form && button) {
+      form.addEventListener("submit", () => {
+        button.disabled = true;
+        button.textContent = "Starting…";
+        sendHeartbeat();
+      });
+    }
+
+    sendHeartbeat();
+    setInterval(sendHeartbeat, heartbeatIntervalMs);
+  </script>
+</body>
 </html>`;
 };
 
@@ -405,16 +446,11 @@ app.get("/", (req, res) => {
 
 app.post("/start", (req, res) => {
   const now = Date.now();
-  if (now - lastStartAt < 2000) {
-    res.redirect("/?message=Capture+request+already+in+progress");
-    return;
-  }
+  if (now - lastStartAt < 2000) { res.redirect("/?message=Capture+request+already+in+progress"); return; }
   lastStartAt = now;
+
   const { serverHost } = req.body;
-  if (!serverHost) {
-    res.redirect("/?message=Missing+server+host");
-    return;
-  }
+  if (!serverHost) { res.redirect("/?message=Missing+server+host"); return; }
 
   const capturePath = path.join(__dirname, "capture.sh");
   const started = [];
@@ -423,74 +459,40 @@ app.post("/start", (req, res) => {
   registry.defaults.serverHost = serverHost;
 
   cameraList.forEach((camera) => {
-    const cameraId = camera.id;
-    const device = req.body[`device_${cameraId}`];
-    const serverPort = req.body[`serverPort_${cameraId}`];
+    const cameraId    = camera.id;
+    const device      = req.body[`device_${cameraId}`];
+    const serverPort  = req.body[`serverPort_${cameraId}`];
     const audioDevice = req.body[`audio_${cameraId}`];
-    camera.devicePath = device || "";
-    camera.serverPort = serverPort || "";
+    camera.devicePath  = device || "";
+    camera.serverPort  = serverPort || "";
     camera.audioDevice = audioDevice || "";
 
-    if (!device) {
-      return;
-    }
-
-    if (!serverPort) {
-      return;
-    }
+    if (!device || !serverPort) return;
 
     const existing = running.get(cameraId);
-    if (existing) {
-      stopCaptureProcess(existing);
-      running.delete(cameraId);
-    }
+    if (existing) { stopCaptureProcess(existing); running.delete(cameraId); }
 
     const args = [cameraId, device, serverHost, serverPort];
-    if (audioDevice) {
-      args.push(audioDevice);
-    }
-    const childProcess = spawn(capturePath, args, {
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    childProcess.stdout.on("data", (chunk) => {
-      process.stderr.write(chunk);
-    });
+    if (audioDevice) args.push(audioDevice);
 
-    running.set(cameraId, {
-      cameraId,
-      device,
-      serverHost,
-      serverPort,
-      pid: childProcess.pid,
-      process: childProcess,
-      audioDevice: audioDevice || "",
-    });
+    const childProcess = spawn(capturePath, args, { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    childProcess.stdout.on("data", (chunk) => process.stderr.write(chunk));
 
-    childProcess.on("exit", () => {
-      running.delete(cameraId);
-    });
-
+    running.set(cameraId, { cameraId, device, serverHost, serverPort, pid: childProcess.pid, process: childProcess, audioDevice: audioDevice || "" });
+    childProcess.on("exit", () => running.delete(cameraId));
     started.push(`${cameraId} (${device})`);
   });
 
   saveRegistry(registry);
 
-  if (!started.length) {
-    res.redirect("/?message=No+cameras+selected");
-    return;
-  }
-
+  if (!started.length) { res.redirect("/?message=No+cameras+selected"); return; }
   res.redirect(`/?message=Started+${encodeURIComponent(started.join(",+"))}`);
 });
 
 app.post("/stop", (req, res) => {
   const { cameraId } = req.body;
   const session = running.get(cameraId);
-  if (session) {
-    stopCaptureProcess(session);
-    running.delete(cameraId);
-  }
+  if (session) { stopCaptureProcess(session); running.delete(cameraId); }
   res.redirect("/?message=Stopped+capture");
 });
 
@@ -498,8 +500,6 @@ app.listen(port, "0.0.0.0", () => {
   const addresses = getLanAddresses();
   const addressList = addresses.length ? addresses : ["<lan-ip>"];
   console.log("Chickencams Aggregator UI running:");
-  addressList.forEach((address) => {
-    console.log(`  http://${address}:${port}`);
-  });
+  addressList.forEach((address) => console.log(`  http://${address}:${port}`));
   console.log("Use CTRL+C to stop.");
 });

@@ -113,6 +113,90 @@ function buildSrtSource(ingestHost, port, fallbackSource) {
   return `srt://${host}:${port}?mode=listener`;
 }
 
+function parseOptionalInteger(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeRateMode(value, fallback = "cbr") {
+  return normalizeString(value).toLowerCase() === "vbr" ? "vbr" : fallback;
+}
+
+function normalizeVideoEncoder(value, fallback = "auto") {
+  const normalized = normalizeString(value).toLowerCase();
+  if (["nvidia", "nvenc", "gpu", "h264_nvenc"].includes(normalized)) {
+    return "nvidia";
+  }
+  if (["cpu", "x264", "libx264"].includes(normalized)) {
+    return "cpu";
+  }
+  return fallback;
+}
+
+function getAbrVariant(index) {
+  const variant = Array.isArray(config.hls?.abr) ? config.hls.abr[index] ?? {} : {};
+  return {
+    rateMode: normalizeRateMode(variant.rateMode, "vbr"),
+    bitrateKbps: parseOptionalInteger(variant.bitrateKbps),
+    maxrateKbps: parseOptionalInteger(variant.maxrateKbps),
+    bufsizeKbps: parseOptionalInteger(variant.bufsizeKbps),
+    crf: parseOptionalInteger(variant.crf),
+    fps: parseOptionalInteger(variant.fps)
+  };
+}
+
+function appendRateSettingsEnv(target, prefix, variant) {
+  target[`${prefix}_RATE_MODE`] = variant.rateMode;
+  if (Number.isFinite(variant.bitrateKbps)) {
+    target[`${prefix}_BITRATE_KBPS`] = String(variant.bitrateKbps);
+  }
+  if (Number.isFinite(variant.maxrateKbps)) {
+    target[`${prefix}_MAXRATE_KBPS`] = String(variant.maxrateKbps);
+  }
+  if (Number.isFinite(variant.bufsizeKbps)) {
+    target[`${prefix}_BUFSIZE_KBPS`] = String(variant.bufsizeKbps);
+  }
+  if (Number.isFinite(variant.crf)) {
+    target[`${prefix}_CRF`] = String(variant.crf);
+  }
+  if (Number.isFinite(variant.fps)) {
+    target[`${prefix}_FPS`] = String(variant.fps);
+  }
+}
+
+function buildHlsEncoderEnv() {
+  const env = {
+    VIDEO_ENCODER: normalizeVideoEncoder(config.hls?.videoEncoder, "auto")
+  };
+  for (let index = 0; index < 4; index += 1) {
+    appendRateSettingsEnv(env, `HLS_VARIANT_${index}`, getAbrVariant(index));
+  }
+  appendRateSettingsEnv(env, "RECORD", getAbrVariant(0));
+
+  if (Number.isFinite(config.hls?.segmentDurationSeconds)) {
+    env.HLS_SEGMENT_TIME = String(config.hls.segmentDurationSeconds);
+  }
+  if (Number.isFinite(config.hls?.livePlaylistSize)) {
+    env.HLS_PLAYLIST_SIZE = String(config.hls.livePlaylistSize);
+  }
+  if (Number.isFinite(config.hls?.recordingSegmentSeconds)) {
+    env.RECORD_SEGMENT_TIME = String(config.hls.recordingSegmentSeconds);
+  }
+
+  return env;
+}
+
+function buildRecordingEncoderEnv() {
+  const env = {
+    VIDEO_ENCODER: normalizeVideoEncoder(config.hls?.videoEncoder, "auto")
+  };
+  appendRateSettingsEnv(env, "VIDEO", getAbrVariant(0));
+  if (Number.isFinite(config.hls?.recordingSegmentSeconds)) {
+    env.RECORD_SEGMENT_TIME = String(config.hls.recordingSegmentSeconds);
+  }
+  return env;
+}
+
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
   ? config.hls.recordingSafetyBufferSeconds
   : 5;
@@ -133,6 +217,7 @@ function ensureStoragePaths() {
 ensureStoragePaths();
 
 const encoderProcesses = new Map();
+let encoderRestartScanInFlight = false;
 
 function isSrtSource(source) {
   return typeof source === "string" && source.startsWith("srt://");
@@ -152,9 +237,15 @@ function hasCommand(command) {
   return result.status === 0;
 }
 
-function spawnEncoder(scriptName, args, label) {
+function spawnEncoder(scriptName, args, label, env = {}) {
   const scriptPath = path.join(encoderRoot, scriptName);
-  const child = spawn(scriptPath, args, { stdio: "inherit" });
+  const child = spawn(scriptPath, args, {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ...env
+    }
+  });
   encoderProcesses.set(label, child);
   child.on("close", (code) => {
     encoderProcesses.delete(label);
@@ -262,10 +353,18 @@ async function startCameraEncoders() {
     }
     const hlsLabel = `${camera.id}:hls`;
     const recordLabel = `${camera.id}:record`;
+    const listenerHandledByHls = isSrtListener(camera.source);
+    const needsHlsSpawn = !encoderProcesses.has(hlsLabel);
+    const needsRecordSpawn = !listenerHandledByHls && !encoderProcesses.has(recordLabel);
+
+    if (!needsHlsSpawn && !needsRecordSpawn) {
+      continue;
+    }
+
     const match = camera.source.match(/^srt:\/\/([^:/]+):(\d+)/i);
     const ingestHost = match?.[1] ?? config.ingestHost ?? "0.0.0.0";
     const ingestPort = match ? Number.parseInt(match[2], 10) : null;
-    if (Number.isFinite(ingestPort)) {
+    if (needsHlsSpawn && Number.isFinite(ingestPort)) {
       let available = await checkUdpPortAvailable(ingestPort, ingestHost);
       if (!available) {
         const released = await releaseFfmpegPort(ingestPort);
@@ -280,19 +379,41 @@ async function startCameraEncoders() {
         continue;
       }
     }
-    if (!encoderProcesses.has(hlsLabel)) {
+    if (needsHlsSpawn) {
       const recordingsArg = isSrtListener(camera.source) ? recordingsRoot : "";
-      spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot, recordingsArg], hlsLabel);
+      spawnEncoder(
+        "encode_hls.sh",
+        [camera.id, camera.source, streamsRoot, recordingsArg],
+        hlsLabel,
+        buildHlsEncoderEnv()
+      );
     }
-    if (isSrtListener(camera.source)) {
+    if (listenerHandledByHls) {
       console.warn(
         `[encoders] ${camera.id} recording handled by the HLS encoder for SRT listener sources.`
       );
       continue;
     }
-    if (!encoderProcesses.has(recordLabel)) {
-      spawnEncoder("record_segments.sh", [camera.id, camera.source, recordingsRoot], recordLabel);
+    if (needsRecordSpawn) {
+      spawnEncoder(
+        "record_segments.sh",
+        [camera.id, camera.source, recordingsRoot],
+        recordLabel,
+        buildRecordingEncoderEnv()
+      );
     }
+  }
+}
+
+async function ensureCameraEncodersRunning() {
+  if (encoderRestartScanInFlight) {
+    return;
+  }
+  encoderRestartScanInFlight = true;
+  try {
+    await startCameraEncoders();
+  } finally {
+    encoderRestartScanInFlight = false;
   }
 }
 
@@ -403,7 +524,7 @@ app.get("/api/aggregators", (req, res) => {
 });
 
 app.get("/config", (req, res) => {
-  res.sendFile(path.join(publicDir, "config.html"));
+  res.redirect("/");
 });
 
 app.get("/api/config", requireApiToken, (req, res) => {
@@ -441,7 +562,7 @@ app.post("/api/config", requireApiToken, (req, res) => {
   fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
   fs.writeFileSync(cameraRegistryPath, JSON.stringify({ cameras: updated.cameras }, null, 2));
   config = updated;
-  res.json({ status: "ok" });
+  res.json({ status: "ok", config: updated });
 });
 
 app.get("/api/cameras", (req, res) => {
@@ -881,4 +1002,9 @@ function startServer(port, host, attemptsRemaining = 5) {
 
 const { port, host } = config.server;
 startCameraEncoders();
+setInterval(() => {
+  ensureCameraEncodersRunning().catch((error) => {
+    console.warn("[encoders] periodic restart scan failed:", error.message);
+  });
+}, 15 * 1000);
 startServer(port, host);
