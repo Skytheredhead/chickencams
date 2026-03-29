@@ -30,6 +30,18 @@ sudo systemctl start chickencams
 sudo systemctl status chickencams
 ```
 
+If you want the main server to force NVIDIA/NVENC for HLS + recordings, create `server/config.json` with:
+
+```json
+{
+  "hls": {
+    "videoEncoder": "nvidia"
+  }
+}
+```
+
+Valid values are `"auto"`, `"nvidia"`, and `"cpu"`. With `"nvidia"`, the encoder now fails loudly instead of silently falling back to `libx264`.
+
 2. Open the main UI in a browser:
 
 - User UI: `http://your_pc's_ip:7979/`

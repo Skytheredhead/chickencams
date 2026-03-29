@@ -55,6 +55,7 @@
     }
   ],
   "hls": {
+    "videoEncoder": "auto",
     "segmentDurationSeconds": 1,
     "livePlaylistSize": 300,
     "recordingSegmentSeconds": 60,

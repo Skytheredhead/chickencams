@@ -122,6 +122,17 @@ function normalizeRateMode(value, fallback = "cbr") {
   return normalizeString(value).toLowerCase() === "vbr" ? "vbr" : fallback;
 }
 
+function normalizeVideoEncoder(value, fallback = "auto") {
+  const normalized = normalizeString(value).toLowerCase();
+  if (["nvidia", "nvenc", "gpu", "h264_nvenc"].includes(normalized)) {
+    return "nvidia";
+  }
+  if (["cpu", "x264", "libx264"].includes(normalized)) {
+    return "cpu";
+  }
+  return fallback;
+}
+
 function getAbrVariant(index) {
   const variant = Array.isArray(config.hls?.abr) ? config.hls.abr[index] ?? {} : {};
   return {
@@ -154,7 +165,9 @@ function appendRateSettingsEnv(target, prefix, variant) {
 }
 
 function buildHlsEncoderEnv() {
-  const env = {};
+  const env = {
+    VIDEO_ENCODER: normalizeVideoEncoder(config.hls?.videoEncoder, "auto")
+  };
   for (let index = 0; index < 4; index += 1) {
     appendRateSettingsEnv(env, `HLS_VARIANT_${index}`, getAbrVariant(index));
   }
@@ -174,7 +187,9 @@ function buildHlsEncoderEnv() {
 }
 
 function buildRecordingEncoderEnv() {
-  const env = {};
+  const env = {
+    VIDEO_ENCODER: normalizeVideoEncoder(config.hls?.videoEncoder, "auto")
+  };
   appendRateSettingsEnv(env, "VIDEO", getAbrVariant(0));
   if (Number.isFinite(config.hls?.recordingSegmentSeconds)) {
     env.RECORD_SEGMENT_TIME = String(config.hls.recordingSegmentSeconds);
