@@ -16,6 +16,8 @@ VIDEO_CRF=${VIDEO_CRF:-23}
 VIDEO_BITRATE_KBPS=${VIDEO_BITRATE_KBPS:-3000}
 VIDEO_MAXRATE_KBPS=${VIDEO_MAXRATE_KBPS:-}
 VIDEO_BUFSIZE_KBPS=${VIDEO_BUFSIZE_KBPS:-}
+SRT_LATENCY_MS=${SRT_LATENCY_MS:-50}
+RETRY_DELAY_SECONDS=${RETRY_DELAY_SECONDS:-3}
 
 mkdir -p "${LOG_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -95,9 +97,11 @@ fi
 
 AUDIO_INPUT_ARGS=()
 AUDIO_OUTPUT_ARGS=()
+OUTPUT_MAP_ARGS=(-map 0:v:0)
 if [[ -n "${AUDIO_DEVICE}" ]]; then
   AUDIO_INPUT_ARGS=(-thread_queue_size 64 -f alsa -i "${AUDIO_DEVICE}")
-  AUDIO_OUTPUT_ARGS=(-c:a aac -b:a 128k -ac 2 -ar 48000 -map 0:v:0 -map 1:a:0)
+  AUDIO_OUTPUT_ARGS=(-c:a aac -b:a 128k -ac 2 -ar 48000)
+  OUTPUT_MAP_ARGS+=(-map 1:a:0)
 fi
 
 VIDEO_FILTER_ARGS=(-vf "settb=AVTB,setpts=N/(${INPUT_FPS}*TB)")
@@ -116,33 +120,65 @@ else
   fi
 fi
 
-exec ffmpeg \
-  -fflags +genpts+nobuffer \
-  -flags low_delay \
-  -use_wallclock_as_timestamps 1 \
-  -thread_queue_size 64 \
-  -f v4l2 \
-  -framerate "${INPUT_FPS}" \
-  -video_size 1280x720 \
-  -i "${DEVICE}" \
-  "${AUDIO_INPUT_ARGS[@]}" \
-  "${VIDEO_FILTER_ARGS[@]}" \
-  -c:v libx264 \
-  -preset veryfast \
-  -tune zerolatency \
-  "${VIDEO_RATE_ARGS[@]}" \
-  -r "${INPUT_FPS}" \
-  -g "${INPUT_FPS}" \
-  -keyint_min "${INPUT_FPS}" \
-  -sc_threshold 0 \
-  -force_key_frames "expr:gte(t,n_forced*1)" \
-  -fps_mode cfr \
-  -max_delay 0 \
-  -flush_packets 1 \
-  -muxpreload 0 \
-  -muxdelay 0 \
-  -pix_fmt yuv420p \
-  "${AUDIO_OUTPUT_ARGS[@]}" \
-  -f mpegts \
-  "${PROGRESS_ARGS[@]}" \
-  "srt://${SERVER_HOST}:${SERVER_PORT}?mode=caller&transtype=live&latency=50"
+OUTPUT_URL="srt://${SERVER_HOST}:${SERVER_PORT}?mode=caller&transtype=live&latency=${SRT_LATENCY_MS}"
+ffmpeg_pid=""
+
+cleanup() {
+  if [[ -n "${ffmpeg_pid}" ]]; then
+    kill "${ffmpeg_pid}" 2>/dev/null || true
+    wait "${ffmpeg_pid}" 2>/dev/null || true
+  fi
+  exit 0
+}
+
+trap cleanup INT TERM
+
+attempt=0
+while true; do
+  attempt=$((attempt + 1))
+  log "Starting ffmpeg capture attempt ${attempt} -> ${OUTPUT_URL}"
+
+  ffmpeg \
+    -fflags +genpts+igndts+nobuffer \
+    -flags low_delay \
+    -use_wallclock_as_timestamps 1 \
+    -avoid_negative_ts make_zero \
+    -thread_queue_size 64 \
+    -f v4l2 \
+    -framerate "${INPUT_FPS}" \
+    -video_size 1280x720 \
+    -i "${DEVICE}" \
+    "${AUDIO_INPUT_ARGS[@]}" \
+    "${VIDEO_FILTER_ARGS[@]}" \
+    "${OUTPUT_MAP_ARGS[@]}" \
+    -c:v libx264 \
+    -preset veryfast \
+    -tune zerolatency \
+    "${VIDEO_RATE_ARGS[@]}" \
+    -r "${INPUT_FPS}" \
+    -g "${INPUT_FPS}" \
+    -keyint_min "${INPUT_FPS}" \
+    -sc_threshold 0 \
+    -force_key_frames "expr:gte(t,n_forced*1)" \
+    -fps_mode cfr \
+    -max_delay 0 \
+    -flush_packets 1 \
+    -muxpreload 0 \
+    -muxdelay 0 \
+    -pix_fmt yuv420p \
+    "${AUDIO_OUTPUT_ARGS[@]}" \
+    -f mpegts \
+    "${PROGRESS_ARGS[@]}" \
+    "${OUTPUT_URL}" &
+  ffmpeg_pid=$!
+
+  if wait "${ffmpeg_pid}"; then
+    log "ffmpeg exited cleanly for ${CAMERA_ID}; stopping capture loop."
+    break
+  fi
+
+  exit_code=$?
+  ffmpeg_pid=""
+  log "ffmpeg exited with code ${exit_code} for ${CAMERA_ID}. Retrying in ${RETRY_DELAY_SECONDS}s."
+  sleep "${RETRY_DELAY_SECONDS}"
+done

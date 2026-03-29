@@ -17,11 +17,16 @@ HLS_PLAYLIST_SIZE=${HLS_PLAYLIST_SIZE:-300}
 RECORD_SEGMENT_TIME=${RECORD_SEGMENT_TIME:-60}
 INPUT_ANALYZEDURATION=${INPUT_ANALYZEDURATION:-2000000}
 INPUT_PROBESIZE=${INPUT_PROBESIZE:-1000000}
+FORCE_AUDIO_PRESENT=${FORCE_AUDIO_PRESENT:-}
 
 supports_nvenc() {
   command -v nvidia-smi >/dev/null 2>&1 || return 1
   ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=128x72:rate=1 -t 0.1 \
     -c:v h264_nvenc -f null - >/dev/null 2>&1
+}
+
+is_srt_listener_source() {
+  [[ "${SOURCE_URL}" =~ ^srt:// ]] && [[ "${SOURCE_URL}" =~ mode=listener ]]
 }
 
 NVENC_RETRY_COUNT=${NVENC_RETRY_COUNT:-6}
@@ -135,19 +140,27 @@ VARIANT_3_GOP=$((VARIANT_3_FPS * HLS_SEGMENT_TIME))
 RECORD_GOP=${RECORD_FPS}
 
 AUDIO_PRESENT=false
-if command -v ffprobe >/dev/null 2>&1; then
+if [[ "${FORCE_AUDIO_PRESENT}" == "1" ]]; then
+  AUDIO_PRESENT=true
+elif [[ "${FORCE_AUDIO_PRESENT}" == "0" ]]; then
+  AUDIO_PRESENT=false
+elif is_srt_listener_source; then
+  echo "[encode_hls] ${CAMERA_ID}: skipping ffprobe audio probe for SRT listener source." >&2
+elif command -v ffprobe >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
   probe_output=$(timeout 5 ffprobe -v error -select_streams a:0 -show_entries stream=index -of csv=p=0 "${SOURCE_URL}" 2>/dev/null || true)
   if [[ -n "${probe_output}" ]]; then
     AUDIO_PRESENT=true
   fi
 fi
 
-AUDIO_MAP=()
-AUDIO_CODEC=()
+HLS_AUDIO_MAP=()
+HLS_AUDIO_CODEC=()
+RECORD_AUDIO_MAP=(-map 0:a?)
+RECORD_AUDIO_CODEC=(-c:a aac -b:a 96k -ac 2)
 VAR_STREAM_MAP="v:0 v:1 v:2 v:3"
 if [[ "${AUDIO_PRESENT}" == "true" ]]; then
-  AUDIO_MAP=(-map 0:a?)
-  AUDIO_CODEC=(-c:a aac -b:a 96k -ac 2)
+  HLS_AUDIO_MAP=(-map 0:a?)
+  HLS_AUDIO_CODEC=(-c:a aac -b:a 96k -ac 2)
   VAR_STREAM_MAP="v:0,a:0 v:1,a:0 v:2,a:0 v:3,a:0"
 fi
 
@@ -167,7 +180,7 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
   mkdir -p "${RECORDINGS_DIR}/${CAMERA_ID}"
   RECORDING_ARGS=(
     -map "[vrec]"
-    "${AUDIO_MAP[@]}"
+    "${RECORD_AUDIO_MAP[@]}"
     -c:v "${ENCODER}"
     -preset "${PRESET}"
     "${TUNE[@]}"
@@ -178,7 +191,7 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
     -keyint_min "${RECORD_GOP}"
     "${SC_THRESHOLD[@]}"
     -force_key_frames:v "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})"
-    "${AUDIO_CODEC[@]}"
+    "${RECORD_AUDIO_CODEC[@]}"
     -f segment
     -segment_time "${RECORD_SEGMENT_TIME}"
     -reset_timestamps 1
@@ -209,8 +222,8 @@ ffmpeg \
   -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:1 "${PIX_FMT}" "${VARIANT_1_RATE_ARGS[@]}" -r:v:1 "${VARIANT_1_FPS}" -g:v:1 "${VARIANT_1_GOP}" -keyint_min:v:1 "${VARIANT_1_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:1 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
   -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:2 "${PIX_FMT}" "${VARIANT_2_RATE_ARGS[@]}" -r:v:2 "${VARIANT_2_FPS}" -g:v:2 "${VARIANT_2_GOP}" -keyint_min:v:2 "${VARIANT_2_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:2 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
   -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:3 "${PIX_FMT}" "${VARIANT_3_RATE_ARGS[@]}" -r:v:3 "${VARIANT_3_FPS}" -g:v:3 "${VARIANT_3_GOP}" -keyint_min:v:3 "${VARIANT_3_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:3 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
-  "${AUDIO_MAP[@]}" \
-  "${AUDIO_CODEC[@]}" \
+  "${HLS_AUDIO_MAP[@]}" \
+  "${HLS_AUDIO_CODEC[@]}" \
   -f hls \
   -hls_time "${HLS_SEGMENT_TIME}" \
   -hls_list_size "${HLS_PLAYLIST_SIZE}" \
