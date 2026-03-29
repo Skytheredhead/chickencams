@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number.parseInt(process.env.AGGREGATOR_UI_PORT ?? "3010", 10);
 const registryPath = path.join(__dirname, "registry.json");
+const faviconDataUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23000'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-size='40' font-weight='700' font-family='Arial%2C%20Helvetica%2C%20sans-serif' fill='%23fff'%3EA%3C/text%3E%3C/svg%3E";
 const defaultRegistry = {
   defaults: {
     serverHost: process.env.AGGREGATOR_SERVER_HOST ?? "chickens.local",
@@ -26,11 +27,6 @@ const defaultRegistry = {
 };
 const running = new Map();
 let lastStartAt = 0;
-
-app.get("/favicon.svg", (_req, res) => {
-  res.type("image/svg+xml");
-  res.sendFile(path.join(__dirname, "favicon.svg"));
-});
 
 function stopCaptureProcess(session) {
   if (!session?.process) {
@@ -150,7 +146,7 @@ const renderPage = (message = "") => {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Chickencams Aggregator</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="${faviconDataUrl}" />
     <style>
       :root {
         color-scheme: light dark;
