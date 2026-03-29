@@ -27,6 +27,25 @@ const defaultRegistry = {
 const running = new Map();
 let lastStartAt = 0;
 
+function stopCaptureProcess(session) {
+  if (!session?.process) {
+    return;
+  }
+  try {
+    if (Number.isFinite(session.process.pid)) {
+      try {
+        process.kill(-session.process.pid, "SIGTERM");
+      } catch {
+        session.process.kill("SIGTERM");
+      }
+      return;
+    }
+    session.process.kill("SIGTERM");
+  } catch (error) {
+    console.warn(`Failed to stop capture ${session.cameraId}:`, error.message);
+  }
+}
+
 app.use(express.urlencoded({ extended: false }));
 
 const loadRegistry = () => {
@@ -327,12 +346,53 @@ const renderPage = (message = "") => {
     <script>
       const form = document.querySelector('form[action="/start"]');
       const button = document.getElementById("startButton");
+      const serverHostInput = document.getElementById("serverHost");
+      const heartbeatHostname = ${JSON.stringify(os.hostname())};
+      const heartbeatAddresses = ${JSON.stringify(addresses)};
+      const heartbeatIntervalMs = 15000;
+
+      function getHeartbeatServerHost() {
+        return (serverHostInput?.value || "").trim();
+      }
+
+      function heartbeatUrl(serverHost) {
+        return "http://" + serverHost + ":7979/api/aggregators/heartbeat";
+      }
+
+      async function sendHeartbeat() {
+        const serverHost = getHeartbeatServerHost();
+        if (!serverHost) {
+          return;
+        }
+        try {
+          await fetch(heartbeatUrl(serverHost), {
+            method: "POST",
+            mode: "cors",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: heartbeatHostname + ":" + (heartbeatAddresses[0] || "unknown"),
+              hostname: heartbeatHostname,
+              ip: heartbeatAddresses[0] || "",
+              addresses: heartbeatAddresses,
+            }),
+          });
+        } catch (error) {
+          return;
+        }
+      }
+
       if (form && button) {
         form.addEventListener("submit", () => {
           button.disabled = true;
           button.textContent = "Starting...";
+          sendHeartbeat();
         });
       }
+
+      sendHeartbeat();
+      setInterval(sendHeartbeat, heartbeatIntervalMs);
     </script>
   </body>
 </html>`;
@@ -381,7 +441,7 @@ app.post("/start", (req, res) => {
 
     const existing = running.get(cameraId);
     if (existing) {
-      existing.process.kill("SIGTERM");
+      stopCaptureProcess(existing);
       running.delete(cameraId);
     }
 
@@ -389,8 +449,12 @@ app.post("/start", (req, res) => {
     if (audioDevice) {
       args.push(audioDevice);
     }
-    const process = spawn(capturePath, args, {
-      stdio: "inherit",
+    const childProcess = spawn(capturePath, args, {
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    childProcess.stdout.on("data", (chunk) => {
+      process.stderr.write(chunk);
     });
 
     running.set(cameraId, {
@@ -398,12 +462,12 @@ app.post("/start", (req, res) => {
       device,
       serverHost,
       serverPort,
-      pid: process.pid,
-      process,
+      pid: childProcess.pid,
+      process: childProcess,
       audioDevice: audioDevice || "",
     });
 
-    process.on("exit", () => {
+    childProcess.on("exit", () => {
       running.delete(cameraId);
     });
 
@@ -424,7 +488,7 @@ app.post("/stop", (req, res) => {
   const { cameraId } = req.body;
   const session = running.get(cameraId);
   if (session) {
-    session.process.kill("SIGTERM");
+    stopCaptureProcess(session);
     running.delete(cameraId);
   }
   res.redirect("/?message=Stopped+capture");

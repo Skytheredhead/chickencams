@@ -1,7 +1,10 @@
 const cameraGrid = document.getElementById("cameraGrid");
 const siteTitle = document.getElementById("siteTitle");
+const aggregatorStatusBar = document.getElementById("aggregatorStatusBar");
+const cameraEmptyState = document.getElementById("cameraEmptyState");
 
 let cameras = [];
+const cameraCards = new Map();
 
 function getStatusLabel(status) {
   switch (status) {
@@ -40,6 +43,7 @@ function buildCameraCard(camera) {
   video.playsInline = true;
   video.muted = true;
   video.dataset.camera = camera.id;
+  video.dataset.streamReady = "false";
 
   const placeholder = document.createElement("div");
   placeholder.className = "camera-placeholder";
@@ -48,26 +52,101 @@ function buildCameraCard(camera) {
   body.append(video, placeholder);
   card.append(header, body);
 
-  return { card, video, placeholder, meta };
+  return { card, video, placeholder, meta, title };
 }
 
-function updateCameraStatus(card, placeholder, health) {
+function isStreamRendering(video) {
+  return video?.dataset.streamReady === "true"
+    || (video instanceof HTMLVideoElement && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+}
+
+function showPlaceholder(placeholder, message) {
+  if (!placeholder) {
+    return;
+  }
+  if (message) {
+    placeholder.textContent = message;
+  }
+  placeholder.classList.remove("hidden");
+}
+
+function hidePlaceholder(placeholder) {
+  placeholder?.classList.add("hidden");
+}
+
+function updateCameraStatus(card, video, placeholder, health) {
   const state = health?.status ?? "OFFLINE";
   card.dataset.state = state;
-  card.classList.toggle("offline", state !== "ONLINE");
-  if (state === "ONLINE") {
-    placeholder.classList.add("hidden");
-  } else if (state === "DEGRADED") {
-    placeholder.classList.remove("hidden");
-    placeholder.textContent = "Signal degraded";
-  } else {
-    placeholder.classList.remove("hidden");
-    placeholder.textContent = "No signal";
+  card.classList.toggle("offline", state === "OFFLINE");
+  card.classList.toggle("hidden", state === "OFFLINE");
+  if (state === "OFFLINE") {
+    hidePlaceholder(placeholder);
+    return;
   }
+  if (state === "DEGRADED" && !isStreamRendering(video)) {
+    showPlaceholder(placeholder, "Signal degraded");
+    return;
+  }
+  hidePlaceholder(placeholder);
+}
+
+function updateCameraMeta(meta, health) {
+  if (!meta) {
+    return;
+  }
+  const bitrateKbps = Number.isFinite(health?.bitrateKbps) ? Math.round(health.bitrateKbps) : null;
+  meta.textContent = bitrateKbps != null ? `${bitrateKbps.toLocaleString()} kbps` : "— kbps";
+}
+
+function updateEmptyState() {
+  const activeCards = cameraGrid.querySelectorAll(".camera-card:not(.hidden)");
+  if (cameraEmptyState) {
+    cameraEmptyState.classList.toggle("hidden", activeCards.length > 0);
+  }
+}
+
+function renderAggregatorStatus(aggregators) {
+  if (!aggregatorStatusBar) {
+    return;
+  }
+  aggregatorStatusBar.innerHTML = "";
+  const onlineAggregators = (aggregators ?? []).filter(Boolean);
+  if (onlineAggregators.length === 0) {
+    aggregatorStatusBar.classList.add("hidden");
+    return;
+  }
+  aggregatorStatusBar.classList.remove("hidden");
+  onlineAggregators.forEach((aggregator) => {
+    const pill = document.createElement("span");
+    pill.className = "status-pill online";
+    const name = document.createElement("span");
+    name.textContent = aggregator.hostname || "Aggregator";
+    const ip = document.createElement("span");
+    ip.className = "status-pill-ip";
+    ip.textContent = aggregator.ip ? ` · ${aggregator.ip}` : "";
+    pill.append(name, ip);
+    aggregatorStatusBar.appendChild(pill);
+  });
+}
+
+function upsertCameraCard(camera) {
+  let entry = cameraCards.get(camera.id);
+  if (!entry) {
+    entry = buildCameraCard(camera);
+    cameraCards.set(camera.id, entry);
+    cameraGrid.appendChild(entry.card);
+    attachLiveStream(entry.video, camera.id, entry.placeholder);
+  }
+  entry.title.textContent = camera.name;
+  return entry;
 }
 
 function attachLiveStream(video, cameraId, placeholder) {
   const streamUrl = `/streams/${cameraId}/master.m3u8`;
+  const markStreamReady = () => {
+    video.dataset.streamReady = "true";
+    hidePlaceholder(placeholder);
+  };
   let retryTimeout = null;
   const scheduleRetry = () => {
     if (retryTimeout) {
@@ -92,11 +171,12 @@ function attachLiveStream(video, cameraId, placeholder) {
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      placeholder?.classList.add("hidden");
+      markStreamReady();
     });
     hls.on(Hls.Events.ERROR, (_event, data) => {
-      placeholder?.classList.remove("hidden");
-      placeholder.textContent = "No signal";
+      if (!isStreamRendering(video)) {
+        showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
+      }
       if (data?.fatal) {
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           hls.startLoad();
@@ -114,12 +194,13 @@ function attachLiveStream(video, cameraId, placeholder) {
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = streamUrl;
-    video.addEventListener("loadedmetadata", () => {
-      placeholder?.classList.add("hidden");
-    }, { once: true });
+    video.addEventListener("loadedmetadata", markStreamReady, { once: true });
+    video.addEventListener("loadeddata", markStreamReady, { once: true });
+    video.addEventListener("playing", markStreamReady, { once: true });
     video.addEventListener("error", () => {
-      placeholder?.classList.remove("hidden");
-      placeholder.textContent = "No signal";
+      if (!isStreamRendering(video)) {
+        showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
+      }
       scheduleRetry();
     });
   }
@@ -150,47 +231,51 @@ async function loadCameras() {
       throw new Error("Camera list unavailable");
     }
     const data = await response.json();
-    cameras = data.cameras ?? [];
+    cameras = (data.cameras ?? []).filter((camera) => camera.enabled);
   } catch (error) {
-    cameras = [
-      { id: "cam1", name: "Camera 1", enabled: true },
-      { id: "cam2", name: "Camera 2", enabled: true },
-      { id: "cam3", name: "Camera 3", enabled: true },
-      { id: "cam4", name: "Camera 4", enabled: true },
-      { id: "cam5", name: "Camera 5", enabled: true }
-    ];
+    updateEmptyState();
+    return false;
   }
 
-  cameraGrid.innerHTML = "";
-  cameras.filter((camera) => camera.enabled).forEach((camera) => {
-    const { card, video, placeholder } = buildCameraCard(camera);
-    cameraGrid.appendChild(card);
-    updateCameraStatus(card, placeholder, camera.health);
-    attachLiveStream(video, camera.id, placeholder);
+  const currentCameraIds = new Set(cameras.map((camera) => camera.id));
+  for (const [cameraId, entry] of cameraCards.entries()) {
+    if (!currentCameraIds.has(cameraId)) {
+      entry.card.remove();
+      cameraCards.delete(cameraId);
+    }
+  }
+
+  cameras.forEach((camera) => {
+    const entry = upsertCameraCard(camera);
+    updateCameraMeta(entry.meta, camera.health);
+    updateCameraStatus(entry.card, entry.video, entry.placeholder, camera.health);
   });
+
+  updateEmptyState();
+  return true;
 }
 
-loadCameras();
+async function loadAggregators() {
+  try {
+    const response = await fetch("/api/aggregators");
+    if (!response.ok) {
+      return false;
+    }
+    const data = await response.json();
+    renderAggregatorStatus(data.aggregators ?? []);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function refreshDashboard() {
+  await Promise.all([loadCameras(), loadAggregators()]);
+}
+
+refreshDashboard();
 loadUiConfig();
 
 setInterval(async () => {
-  try {
-    const response = await fetch("/api/cameras");
-    if (!response.ok) {
-      return;
-    }
-    const data = await response.json();
-    (data.cameras ?? []).forEach((camera) => {
-      const card = cameraGrid.querySelector(`[data-camera="${camera.id}"]`);
-      if (!card) {
-        return;
-      }
-      const placeholder = card.querySelector(".camera-placeholder");
-      if (placeholder) {
-        updateCameraStatus(card, placeholder, camera.health);
-      }
-    });
-  } catch (error) {
-    return;
-  }
+  refreshDashboard();
 }, 5000);

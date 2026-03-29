@@ -11,6 +11,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR=${LOG_DIR:-"${SCRIPT_DIR}/logs"}
 LOG_FILE=${LOG_FILE:-"${LOG_DIR}/${CAMERA_ID}.log"}
 MAX_FPS=${MAX_FPS:-10}
+VIDEO_RATE_MODE=${VIDEO_RATE_MODE:-vbr}
+VIDEO_CRF=${VIDEO_CRF:-23}
+VIDEO_BITRATE_KBPS=${VIDEO_BITRATE_KBPS:-3000}
+VIDEO_MAXRATE_KBPS=${VIDEO_MAXRATE_KBPS:-4500}
+VIDEO_BUFSIZE_KBPS=${VIDEO_BUFSIZE_KBPS:-9000}
 
 mkdir -p "${LOG_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -68,7 +73,7 @@ INPUT_FPS=$(detect_camera_fps)
 if [[ -n "${AUDIO_DEVICE}" ]]; then
   log "Audio device: ${AUDIO_DEVICE}"
 fi
-log "Capture settings: device=${DEVICE}, fps=${INPUT_FPS}, max_fps=${MAX_FPS}, server=${SERVER_HOST}:${SERVER_PORT}"
+log "Capture settings: device=${DEVICE}, fps=${INPUT_FPS}, max_fps=${MAX_FPS}, rate_mode=${VIDEO_RATE_MODE}, server=${SERVER_HOST}:${SERVER_PORT}"
 if command -v v4l2-ctl >/dev/null 2>&1; then
   log "Device formats: $(v4l2-ctl --device "${DEVICE}" --list-formats-ext 2>/dev/null | tr '\n' ' ')"
 fi
@@ -85,6 +90,13 @@ if [[ -n "${AUDIO_DEVICE}" ]]; then
   AUDIO_OUTPUT_ARGS=(-c:a aac -b:a 128k -ac 2 -ar 48000 -map 0:v:0 -map 1:a:0)
 fi
 
+VIDEO_RATE_ARGS=()
+if [[ "${VIDEO_RATE_MODE}" == "cbr" ]]; then
+  VIDEO_RATE_ARGS=(-b:v "${VIDEO_BITRATE_KBPS}k" -maxrate "${VIDEO_BITRATE_KBPS}k" -bufsize "${VIDEO_BUFSIZE_KBPS}k")
+else
+  VIDEO_RATE_ARGS=(-crf "${VIDEO_CRF}" -maxrate "${VIDEO_MAXRATE_KBPS}k" -bufsize "${VIDEO_BUFSIZE_KBPS}k")
+fi
+
 exec ffmpeg \
   -fflags +genpts+nobuffer \
   -flags low_delay \
@@ -98,9 +110,7 @@ exec ffmpeg \
   -c:v libx264 \
   -preset veryfast \
   -tune zerolatency \
-  -b:v 3000k \
-  -maxrate 3300k \
-  -bufsize 6000k \
+  "${VIDEO_RATE_ARGS[@]}" \
   -fps_mode drop \
   -max_delay 0 \
   -flush_packets 1 \
