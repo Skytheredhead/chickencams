@@ -13,6 +13,8 @@ This folder contains the ThinkPad-side scripts that capture USB webcams and push
 Launch the Aggregator UI to pick from available `/dev/video*` devices and start/stop capture jobs:
 
 ```bash
+cd /path/to/chickencams
+npm install
 node "Aggregator PC/aggregator-ui.js"
 ```
 

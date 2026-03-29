@@ -47,6 +47,7 @@ cd ~/Downloads/chickencams-main
 
 Then, run this command:
 ```bash
+npm install
 node "Aggregator PC/aggregator-ui.js"
 ```
 
