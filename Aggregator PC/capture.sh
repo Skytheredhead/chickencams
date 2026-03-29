@@ -100,6 +100,8 @@ if [[ -n "${AUDIO_DEVICE}" ]]; then
   AUDIO_OUTPUT_ARGS=(-c:a aac -b:a 128k -ac 2 -ar 48000 -map 0:v:0 -map 1:a:0)
 fi
 
+VIDEO_FILTER_ARGS=(-vf "settb=AVTB,setpts=N/(${INPUT_FPS}*TB)")
+
 VIDEO_RATE_ARGS=()
 if [[ "${VIDEO_RATE_MODE}" == "cbr" ]]; then
   TARGET_BUFSIZE_KBPS=${VIDEO_BUFSIZE_KBPS:-$((VIDEO_BITRATE_KBPS * 2))}
@@ -124,6 +126,7 @@ exec ffmpeg \
   -video_size 1280x720 \
   -i "${DEVICE}" \
   "${AUDIO_INPUT_ARGS[@]}" \
+  "${VIDEO_FILTER_ARGS[@]}" \
   -c:v libx264 \
   -preset veryfast \
   -tune zerolatency \
