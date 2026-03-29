@@ -13,6 +13,23 @@ figure out how to install ffmpeg. you got this
 
 open the file **launch-chickencams.sh** (run as program)
 
+Or install it as a `systemd` service on Linux:
+
+```bash
+cd /path/to/chickencams
+chmod +x install-systemd-service.sh
+./install-systemd-service.sh
+```
+
+Then manage it with:
+
+```bash
+sudo systemctl restart chickencams
+sudo systemctl stop chickencams
+sudo systemctl start chickencams
+sudo systemctl status chickencams
+```
+
 2. Open the main UI in a browser:
 
 - User UI: `http://your_pc's_ip:7979/`

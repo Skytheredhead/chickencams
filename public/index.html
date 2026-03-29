@@ -10,16 +10,9 @@
   <body>
     <div class="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
       <header class="flex items-center justify-between px-6 py-5 bg-zinc-950/80 backdrop-blur border-b border-zinc-800">
-        <div class="flex items-center gap-6">
+        <div class="flex min-w-0 flex-1 items-center gap-6">
           <h1 class="text-base font-semibold tracking-tight" id="siteTitle">Chickencams</h1>
-          <div class="hidden md:flex items-center gap-4 text-xs">
-            <span class="text-zinc-400">3D Printer: <span class="text-green-400">Online</span></span>
-            <span class="text-zinc-400">Chicken Coop: <span class="text-green-400">Online</span></span>
-            <span class="text-zinc-400">Server: <span class="text-yellow-400">High Load</span></span>
-            <span class="text-zinc-500">|</span>
-            <span class="text-zinc-400">Agg 1: <span class="text-green-400">Online</span></span>
-            <span class="text-zinc-400">Agg 2: <span class="text-green-400">Online</span></span>
-          </div>
+          <div id="aggregatorStatusBar" class="aggregator-status-bar"></div>
         </div>
         <div class="flex items-center gap-3">
           <a class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" href="/config">
@@ -29,28 +22,7 @@
       </header>
 
       <main class="grid grid-cols-1 gap-4 md:gap-5 p-6">
-        <div class="md:hidden bg-zinc-900/80 border border-zinc-800 rounded-lg p-4 text-xs space-y-2">
-          <div class="flex justify-between">
-            <span class="text-zinc-400">3D Printer</span>
-            <span class="text-green-400">Online</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-zinc-400">Chicken Coop</span>
-            <span class="text-green-400">Online</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-zinc-400">Server</span>
-            <span class="text-yellow-400">High Load</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-zinc-400">Aggregator 1</span>
-            <span class="text-green-400">Online</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-zinc-400">Aggregator 2</span>
-            <span class="text-green-400">Online</span>
-          </div>
-        </div>
+        <p id="cameraEmptyState" class="text-xs text-zinc-500 hidden">No active streams right now.</p>
 
         <section class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5" id="cameraGrid"></section>
       </main>

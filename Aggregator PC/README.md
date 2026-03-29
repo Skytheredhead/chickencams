@@ -31,6 +31,7 @@ The UI listens on port `3010` by default, lists the aggregator's LAN IPs, and pr
 This sends an H.264 stream over SRT to the server listener port defined in `server/config.default.json`.
 
 The script now performs a quick preflight check with `nc` to confirm the server is listening on the requested port before starting the stream.
+It uses variable bitrate by default (`VIDEO_RATE_MODE=vbr`), and you can override the encoder settings with `VIDEO_CRF`, `VIDEO_MAXRATE_KBPS`, `VIDEO_BUFSIZE_KBPS`, or switch back to constant bitrate with `VIDEO_RATE_MODE=cbr`.
 
 ## Camera registry + supervisor
 

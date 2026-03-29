@@ -4,12 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/workspace/chickencams
-ExecStart=/usr/bin/node /workspace/chickencams/server/server.js
+User=__CHICKENCAMS_USER__
+Group=__CHICKENCAMS_GROUP__
+WorkingDirectory=__CHICKENCAMS_WORKDIR__
+ExecStart=__CHICKENCAMS_NODE__ server/server.js
 Restart=always
 RestartSec=3
 Environment=NODE_ENV=production
-Environment=CHICKENCAMS_API_TOKEN=replace-with-a-long-secret
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target

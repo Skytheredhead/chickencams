@@ -327,12 +327,53 @@ const renderPage = (message = "") => {
     <script>
       const form = document.querySelector('form[action="/start"]');
       const button = document.getElementById("startButton");
+      const serverHostInput = document.getElementById("serverHost");
+      const heartbeatHostname = ${JSON.stringify(os.hostname())};
+      const heartbeatAddresses = ${JSON.stringify(addresses)};
+      const heartbeatIntervalMs = 15000;
+
+      function getHeartbeatServerHost() {
+        return (serverHostInput?.value || "").trim();
+      }
+
+      function heartbeatUrl(serverHost) {
+        return "http://" + serverHost + ":7979/api/aggregators/heartbeat";
+      }
+
+      async function sendHeartbeat() {
+        const serverHost = getHeartbeatServerHost();
+        if (!serverHost) {
+          return;
+        }
+        try {
+          await fetch(heartbeatUrl(serverHost), {
+            method: "POST",
+            mode: "cors",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              id: heartbeatHostname + ":" + (heartbeatAddresses[0] || "unknown"),
+              hostname: heartbeatHostname,
+              ip: heartbeatAddresses[0] || "",
+              addresses: heartbeatAddresses,
+            }),
+          });
+        } catch (error) {
+          return;
+        }
+      }
+
       if (form && button) {
         form.addEventListener("submit", () => {
           button.disabled = true;
           button.textContent = "Starting...";
+          sendHeartbeat();
         });
       }
+
+      sendHeartbeat();
+      setInterval(sendHeartbeat, heartbeatIntervalMs);
     </script>
   </body>
 </html>`;

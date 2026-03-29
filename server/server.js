@@ -74,6 +74,7 @@ app.use(morgan("dev", {
       target.startsWith("/streams")
       || target.startsWith("/activity")
       || target.startsWith("/api/cameras")
+      || target.startsWith("/api/aggregators")
       || target.startsWith("/api/rewind")
     );
   }
@@ -87,7 +88,7 @@ app.use((req, res, next) => {
     next();
     return;
   }
-  if (!req.path.includes(".") && !req.path.startsWith("/api")) {
+  if (!req.path.includes(".") && !req.path.startsWith("/api") && req.path !== "/config") {
     res.sendFile(path.join(publicDir, "index.html"));
     return;
   }
@@ -98,6 +99,7 @@ const streamsRoot = path.resolve(rootDir, config.paths.streamsRoot);
 const recordingsRoot = path.resolve(rootDir, config.paths.recordingsRoot);
 const activityRoot = path.resolve(rootDir, config.paths.activityRoot);
 const encoderRoot = path.join(__dirname, "ffmpeg");
+const aggregatorHeartbeats = new Map();
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -362,6 +364,44 @@ function sanitizeCameraId(cameraId) {
   return cameraId;
 }
 
+app.options("/api/aggregators/heartbeat", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.sendStatus(204);
+});
+
+app.post("/api/aggregators/heartbeat", (req, res) => {
+  const payload = req.body ?? {};
+  const id = getAggregatorHeartbeatId(payload);
+  const hostname = normalizeString(payload.hostname) || id;
+  const ip = getAggregatorHeartbeatIp(payload);
+  const addresses = Array.isArray(payload.addresses)
+    ? payload.addresses.map((entry) => normalizeString(entry)).filter(Boolean)
+    : [];
+  aggregatorHeartbeats.set(id, {
+    id,
+    hostname,
+    ip,
+    addresses,
+    lastSeenMs: Date.now()
+  });
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.json({ status: "ok" });
+});
+
+app.get("/api/aggregators", (req, res) => {
+  res.json({
+    aggregators: listOnlineAggregators().map((entry) => ({
+      id: entry.id,
+      hostname: entry.hostname,
+      ip: entry.ip,
+      addresses: entry.addresses,
+      lastSeenMs: entry.lastSeenMs
+    }))
+  });
+});
+
 app.get("/config", (req, res) => {
   res.sendFile(path.join(publicDir, "config.html"));
 });
@@ -599,21 +639,109 @@ function getLatestSegmentMtimeMs(cameraId) {
   return latest;
 }
 
+function getLatestSegmentBitrateKbps(cameraId) {
+  const cameraDir = path.join(streamsRoot, cameraId);
+  if (!fs.existsSync(cameraDir)) {
+    return null;
+  }
+  const variants = fs
+    .readdirSync(cameraDir)
+    .filter((entry) => fs.statSync(path.join(cameraDir, entry)).isDirectory());
+  if (variants.length === 0) {
+    return null;
+  }
+  const orderedVariants = variants.sort((a, b) => {
+    const aNumeric = Number.parseInt(a, 10);
+    const bNumeric = Number.parseInt(b, 10);
+    if (Number.isFinite(aNumeric) && Number.isFinite(bNumeric)) {
+      return aNumeric - bNumeric;
+    }
+    if (Number.isFinite(aNumeric)) {
+      return -1;
+    }
+    if (Number.isFinite(bNumeric)) {
+      return 1;
+    }
+    return a.localeCompare(b);
+  });
+  const variantDir = path.join(cameraDir, orderedVariants[0]);
+  if (!fs.existsSync(variantDir)) {
+    return null;
+  }
+  const segmentDurationSeconds = Number.isFinite(config.hls?.segmentDurationSeconds)
+    ? config.hls.segmentDurationSeconds
+    : 1;
+  const segmentFiles = fs
+    .readdirSync(variantDir)
+    .filter((file) => file.endsWith(".ts"))
+    .sort()
+    .slice(-5);
+  if (segmentFiles.length === 0) {
+    return null;
+  }
+  let totalBytes = 0;
+  for (const file of segmentFiles) {
+    try {
+      totalBytes += fs.statSync(path.join(variantDir, file)).size;
+    } catch (error) {
+      continue;
+    }
+  }
+  const bitrateKbps = (totalBytes * 8) / (segmentDurationSeconds * segmentFiles.length) / 1000;
+  return Number.isFinite(bitrateKbps) ? Math.round(bitrateKbps) : null;
+}
+
 function getCameraHealth(cameraId) {
   const onlineSeconds = Number.isFinite(config.health?.onlineSeconds) ? config.health.onlineSeconds : 5;
   const degradedSeconds = Number.isFinite(config.health?.degradedSeconds) ? config.health.degradedSeconds : 15;
   const lastSegmentMs = getLatestSegmentMtimeMs(cameraId);
   if (!lastSegmentMs) {
-    return { status: "OFFLINE", lastSegmentMs: null };
+    return { status: "OFFLINE", lastSegmentMs: null, bitrateKbps: null };
   }
   const ageSeconds = (Date.now() - lastSegmentMs) / 1000;
+  const bitrateKbps = getLatestSegmentBitrateKbps(cameraId);
   if (ageSeconds <= onlineSeconds) {
-    return { status: "ONLINE", lastSegmentMs };
+    return { status: "ONLINE", lastSegmentMs, bitrateKbps };
   }
   if (ageSeconds <= degradedSeconds) {
-    return { status: "DEGRADED", lastSegmentMs };
+    return { status: "DEGRADED", lastSegmentMs, bitrateKbps };
   }
-  return { status: "OFFLINE", lastSegmentMs };
+  return { status: "OFFLINE", lastSegmentMs, bitrateKbps: null };
+}
+
+function getAggregatorHeartbeatId(payload) {
+  const explicitId = normalizeString(payload?.id);
+  if (explicitId) {
+    return explicitId;
+  }
+  const hostname = normalizeString(payload?.hostname);
+  const ip = normalizeString(payload?.ip);
+  const addresses = Array.isArray(payload?.addresses)
+    ? payload.addresses.map((entry) => normalizeString(entry)).filter(Boolean)
+    : [];
+  return normalizeString([hostname, ip, addresses[0]].filter(Boolean).join(":")) || "aggregator";
+}
+
+function getAggregatorHeartbeatIp(payload) {
+  const ip = normalizeString(payload?.ip);
+  if (ip) {
+    return ip;
+  }
+  if (Array.isArray(payload?.addresses)) {
+    const address = payload.addresses.map((entry) => normalizeString(entry)).find(Boolean);
+    if (address) {
+      return address;
+    }
+  }
+  return "";
+}
+
+function listOnlineAggregators() {
+  const staleAfterMs = 30 * 1000;
+  const now = Date.now();
+  return Array.from(aggregatorHeartbeats.values())
+    .filter((entry) => now - entry.lastSeenMs <= staleAfterMs)
+    .sort((a, b) => b.lastSeenMs - a.lastSeenMs);
 }
 
 function findSegmentsForRange(root, cameraId, start, end, segmentDurationSeconds, safetyBufferSeconds) {
