@@ -27,6 +27,25 @@ const defaultRegistry = {
 const running = new Map();
 let lastStartAt = 0;
 
+function stopCaptureProcess(session) {
+  if (!session?.process) {
+    return;
+  }
+  try {
+    if (Number.isFinite(session.process.pid)) {
+      try {
+        process.kill(-session.process.pid, "SIGTERM");
+      } catch {
+        session.process.kill("SIGTERM");
+      }
+      return;
+    }
+    session.process.kill("SIGTERM");
+  } catch (error) {
+    console.warn(`Failed to stop capture ${session.cameraId}:`, error.message);
+  }
+}
+
 app.use(express.urlencoded({ extended: false }));
 
 const loadRegistry = () => {
@@ -422,7 +441,7 @@ app.post("/start", (req, res) => {
 
     const existing = running.get(cameraId);
     if (existing) {
-      existing.process.kill("SIGTERM");
+      stopCaptureProcess(existing);
       running.delete(cameraId);
     }
 
@@ -430,8 +449,12 @@ app.post("/start", (req, res) => {
     if (audioDevice) {
       args.push(audioDevice);
     }
-    const process = spawn(capturePath, args, {
-      stdio: "inherit",
+    const childProcess = spawn(capturePath, args, {
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    childProcess.stdout.on("data", (chunk) => {
+      process.stderr.write(chunk);
     });
 
     running.set(cameraId, {
@@ -439,12 +462,12 @@ app.post("/start", (req, res) => {
       device,
       serverHost,
       serverPort,
-      pid: process.pid,
-      process,
+      pid: childProcess.pid,
+      process: childProcess,
       audioDevice: audioDevice || "",
     });
 
-    process.on("exit", () => {
+    childProcess.on("exit", () => {
       running.delete(cameraId);
     });
 
@@ -465,7 +488,7 @@ app.post("/stop", (req, res) => {
   const { cameraId } = req.body;
   const session = running.get(cameraId);
   if (session) {
-    session.process.kill("SIGTERM");
+    stopCaptureProcess(session);
     running.delete(cameraId);
   }
   res.redirect("/?message=Stopped+capture");
