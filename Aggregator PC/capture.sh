@@ -128,7 +128,12 @@ exec ffmpeg \
   -preset veryfast \
   -tune zerolatency \
   "${VIDEO_RATE_ARGS[@]}" \
-  -fps_mode drop \
+  -r "${INPUT_FPS}" \
+  -g "${INPUT_FPS}" \
+  -keyint_min "${INPUT_FPS}" \
+  -sc_threshold 0 \
+  -force_key_frames "expr:gte(t,n_forced*1)" \
+  -fps_mode cfr \
   -max_delay 0 \
   -flush_packets 1 \
   -muxpreload 0 \
