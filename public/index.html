@@ -5,286 +5,194 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chickencams</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15"></script>
     <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
       :root {
+        --bg:             #07070a;
+        --surface:        #0f0f14;
+        --border:         #1c1c24;
+        --border-hi:      #2a2a36;
+        --text:           #e8e8f0;
+        --muted:          #5a5a72;
+        --subtle:         #1e1e28;
+        --online-bg:      rgba(16, 185, 129, 0.07);
+        --online-border:  rgba(16, 185, 129, 0.22);
+        --online-text:    #6ee7b7;
+        --accent:         #3b82f6;
         color-scheme: dark;
       }
 
-      * {
-        box-sizing: border-box;
-      }
-
       body {
-        margin: 0;
-        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-        background: #09090b;
-      }
-
-      .min-h-screen {
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Outfit', system-ui, sans-serif;
+        font-size: 14px;
         min-height: 100vh;
       }
 
-      .font-sans {
-        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-      }
+      a { color: inherit; text-decoration: none; }
 
-      .bg-zinc-950 {
-        background-color: #09090b;
-      }
-
-      .bg-zinc-950\/80 {
-        background-color: rgba(9, 9, 11, 0.8);
-      }
-
-      .bg-zinc-900\/80 {
-        background-color: rgba(24, 24, 27, 0.8);
-      }
-
-      .text-zinc-100 {
-        color: #f4f4f5;
-      }
-
-      .text-zinc-600 {
-        color: #52525b;
-      }
-
-      .text-zinc-400 {
-        color: #a1a1aa;
-      }
-
-      .text-zinc-500 {
-        color: #71717a;
-      }
-
-      .text-green-400 {
-        color: #4ade80;
-      }
-
-      .text-yellow-400 {
-        color: #facc15;
-      }
-
-      .text-xs {
-        font-size: 12px;
-      }
-
-      .text-sm {
-        font-size: 14px;
-      }
-
-      .text-base {
-        font-size: 16px;
-      }
-
-      .font-semibold {
-        font-weight: 600;
-      }
-
-      .tracking-tight {
-        letter-spacing: -0.01em;
-      }
-
-      .flex {
+      /* ── Header ── */
+      header {
         display: flex;
-      }
-
-      .grid {
-        display: grid;
-      }
-
-      .items-center {
         align-items: center;
-      }
-
-      .justify-between {
         justify-content: space-between;
-      }
-
-      .gap-3 {
-        gap: 12px;
-      }
-
-      .gap-4 {
         gap: 16px;
+        padding: 10px 24px;
+        min-height: 52px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg);
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }
 
-      .gap-5 {
+      .header-left {
+        display: flex;
+        align-items: center;
         gap: 20px;
+        min-width: 0;
+        flex: 1;
+        flex-wrap: wrap;
+        row-gap: 8px;
       }
 
-      .gap-6 {
-        gap: 24px;
+      #siteTitle {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text);
+        white-space: nowrap;
       }
+      #siteTitle.hidden { display: none; }
 
-      .px-6 {
-        padding-left: 24px;
-        padding-right: 24px;
-      }
-
-      .py-5 {
-        padding-top: 20px;
-        padding-bottom: 20px;
-      }
-
-      .p-6 {
-        padding: 24px;
-      }
-
-      .p-4 {
-        padding: 16px;
-      }
-
-      .px-3 {
-        padding-left: 12px;
-        padding-right: 12px;
-      }
-
-      .py-1\.5 {
-        padding-top: 6px;
-        padding-bottom: 6px;
-      }
-
-      .border {
-        border-width: 1px;
-        border-style: solid;
-      }
-
-      .border-b {
-        border-bottom-width: 1px;
-        border-bottom-style: solid;
-      }
-
-      .border-zinc-800 {
-        border-color: #27272a;
-      }
-
-      .border-zinc-700 {
-        border-color: #3f3f46;
-      }
-
-      .rounded-lg {
-        border-radius: 12px;
-      }
-
-      .rounded-md {
-        border-radius: 8px;
-      }
-
-      .overflow-hidden {
-        overflow: hidden;
-      }
-
-      .backdrop-blur {
-        backdrop-filter: blur(12px);
-      }
-
-      .space-y-2 > * + * {
-        margin-top: 8px;
-      }
-
-      .transition {
-        transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-      }
-
-      .aggregator-status-bar {
+      #aggregatorStatusBar {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
+        gap: 6px;
         min-width: 0;
       }
+      #aggregatorStatusBar.hidden { display: none; }
 
       .status-pill {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 5px 10px;
+        gap: 7px;
+        padding: 3px 10px;
         border-radius: 999px;
-        border: 1px solid #27272a;
-        background: rgba(24, 24, 27, 0.75);
-        color: #a1a1aa;
-        font-size: 12px;
+        border: 1px solid var(--border-hi);
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 11px;
+        font-family: 'JetBrains Mono', monospace;
         white-space: nowrap;
       }
 
       .status-pill.online {
-        border-color: rgba(34, 197, 94, 0.35);
-        background: rgba(20, 83, 45, 0.18);
-        color: #dcfce7;
+        border-color: var(--online-border);
+        background: var(--online-bg);
+        color: var(--online-text);
       }
 
-      .status-pill-ip {
-        color: #f4f4f5;
-        font-variant-numeric: tabular-nums;
+      .status-pill::before {
+        content: '';
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex-shrink: 0;
+      }
+      .status-pill.online::before { background: #10b981; }
+
+      .status-pill-ip { opacity: 0.65; }
+
+      .settings-link {
+        appearance: none;
+        background: transparent;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+        padding: 5px 12px;
+        border: 1px solid var(--border-hi);
+        border-radius: 6px;
+        transition: color 0.15s, border-color 0.15s;
+        white-space: nowrap;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .settings-link:hover { color: var(--text); border-color: var(--subtle); }
+      .settings-link[aria-expanded="true"] {
+        color: var(--text);
+        border-color: var(--accent);
+        background: rgba(59, 130, 246, 0.08);
       }
 
-      .hover\:bg-zinc-800:hover {
-        background-color: #27272a;
+      /* ── Main layout ── */
+      main {
+        padding: 20px 24px;
+        display: grid;
+        gap: 20px;
       }
 
-      .hover\:border-zinc-700:hover {
-        border-color: #3f3f46;
+      #cameraEmptyState {
+        font-size: 13px;
+        color: var(--muted);
+        padding: 60px 0;
+        text-align: center;
       }
+      #cameraEmptyState.hidden { display: none; }
 
-      .grid-cols-1 {
-        grid-template-columns: repeat(1, minmax(0, 1fr));
-      }
-
-      .aspect-video {
-        aspect-ratio: 16 / 9;
-      }
-
-      .hidden {
-        display: none;
-      }
-
-      @media (min-width: 768px) {
-        .md\:flex {
-          display: flex;
-        }
-
-        .md\:hidden {
-          display: none;
-        }
-
-        .md\:gap-5 {
-          gap: 20px;
-        }
-
-        .md\:grid-cols-2 {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+      /* ── Camera Grid ── */
+      #cameraGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 10px;
       }
 
       .camera-card {
-        background: rgba(24, 24, 27, 0.8);
-        border: 1px solid #27272a;
-        border-radius: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
         overflow: hidden;
+        transition: border-color 0.2s;
       }
+      .camera-card:not(.offline):hover { border-color: var(--border-hi); }
+      .camera-card.hidden { display: none; }
 
       .camera-card-header {
-        padding: 8px 12px;
-        font-size: 12px;
-        color: #a1a1aa;
-        border-bottom: 1px solid #27272a;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--border);
       }
 
-      .camera-card-body {
-        position: relative;
-        background: #0b0b0e;
+      .cam-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
       }
+
+      .cam-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .camera-card-body { position: relative; background: #020204; }
 
       .camera-card video {
         width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
         aspect-ratio: 16 / 9;
-        background: #0b0b0e;
+        display: block;
+        object-fit: cover;
+        background: #020204;
       }
 
       .camera-placeholder {
@@ -293,164 +201,313 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #71717a;
-        font-size: 14px;
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        background: #020204;
+      }
+      .camera-placeholder.hidden { display: none; }
+
+      /* ── Settings ── */
+      #settingsCard {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        width: min(560px, 100%);
+        max-height: calc(100vh - 92px);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+        position: relative;
+        z-index: 1;
       }
 
-      .camera-card.offline {
-        border-color: #3f3f46;
+      .settings-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        justify-content: flex-end;
+        padding: 68px 24px 24px;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.18s ease, visibility 0.18s ease;
+        z-index: 20;
       }
 
-      .camera-card.offline .camera-card-header {
-        color: #71717a;
+      .settings-overlay.open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
       }
 
-      .settings-card {
-        scroll-margin-top: 24px;
+      .settings-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(4, 4, 8, 0.5);
+        backdrop-filter: blur(4px);
       }
 
-      .settings-card-header {
+      .settings-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
+        gap: 16px;
+      }
+
+      .settings-header-copy h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
+      .settings-header-copy p {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .settings-close {
+        appearance: none;
+        border: 1px solid var(--border-hi);
+        background: var(--subtle);
+        color: var(--muted);
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        transition: color 0.15s, border-color 0.15s, background 0.15s;
+      }
+      .settings-close:hover {
+        color: var(--text);
+        border-color: var(--accent);
+        background: rgba(59, 130, 246, 0.08);
+      }
+
+      .settings-body {
+        padding: 20px;
+        display: grid;
+        gap: 20px;
+        overflow: auto;
+      }
+
+      .settings-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
         gap: 12px;
       }
 
-      a {
-        color: inherit;
-        text-decoration: none;
+      .field label {
+        display: block;
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 6px;
+      }
+
+      .field input,
+      .field select {
+        width: 100%;
+        padding: 7px 10px;
+        background: var(--bg);
+        border: 1px solid var(--border-hi);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.15s;
+        -webkit-appearance: none;
+      }
+      .field input:focus,
+      .field select:focus { border-color: var(--accent); }
+
+      /* ── Camera config rows ── */
+      #configList { display: grid; gap: 8px; }
+
+      .config-row {
+        display: grid;
+        grid-template-columns: 72px 1fr auto 140px;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      @media (max-width: 600px) {
+        header { padding: 10px 16px; }
+        main { padding: 16px; }
+        #cameraGrid { grid-template-columns: 1fr; }
+        .config-row { grid-template-columns: 1fr 1fr; }
+        .config-row-title { grid-column: 1 / -1; }
+        .settings-overlay {
+          padding: 60px 12px 12px;
+          justify-content: stretch;
+        }
+        #settingsCard {
+          width: 100%;
+          max-height: calc(100vh - 72px);
+        }
+      }
+
+      .config-row-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .config-field { display: flex; flex-direction: column; gap: 4px; }
+
+      .config-field label {
+        font-size: 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
       }
 
       .config-input {
         width: 100%;
-        margin-top: 6px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid #3f3f46;
-        background: rgba(9, 9, 11, 0.7);
-        color: #f4f4f5;
-      }
-
-      .config-list {
-        margin-top: 16px;
-        display: grid;
-        gap: 12px;
-      }
-
-      .config-row {
-        border: 1px solid #27272a;
-        border-radius: 12px;
-        padding: 12px;
-        background: rgba(9, 9, 11, 0.6);
-        display: grid;
-        gap: 10px;
-      }
-
-      .config-row-title {
+        padding: 6px 8px;
+        background: var(--surface);
+        border: 1px solid var(--border-hi);
+        border-radius: 5px;
+        color: var(--text);
+        font-family: inherit;
         font-size: 12px;
-        color: #a1a1aa;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
+        outline: none;
+        transition: border-color 0.15s;
       }
-
-      .config-field {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
+      .config-input:focus { border-color: var(--accent); }
 
       .config-checkbox {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
         font-size: 12px;
-        color: #a1a1aa;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
       }
+      .config-checkbox input { accent-color: var(--accent); }
 
-      .config-actions {
-        margin-top: 12px;
+      /* ── Actions ── */
+      .settings-actions {
         display: flex;
         align-items: center;
         gap: 12px;
       }
 
-      .mt-3 {
-        margin-top: 12px;
+      .btn {
+        padding: 7px 16px;
+        border-radius: 6px;
+        border: 1px solid var(--border-hi);
+        background: var(--subtle);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
       }
+      .btn:hover { background: var(--border-hi); }
+      .btn:disabled { opacity: 0.4; cursor: default; }
+
+      #configStatus { font-size: 12px; color: var(--muted); }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15"></script>
   </head>
   <body>
-    <div class="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
-      <header class="flex items-center justify-between px-6 py-5 bg-zinc-950/80 backdrop-blur border-b border-zinc-800">
-        <div class="flex min-w-0 flex-1 items-center gap-6">
-          <h1 class="text-base font-semibold tracking-tight" id="siteTitle">Chickencams</h1>
-          <div id="aggregatorStatusBar" class="aggregator-status-bar"></div>
-        </div>
-        <div class="flex items-center gap-3">
-          <a class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" href="#settingsCard">
-            Settings
-          </a>
-        </div>
-      </header>
+    <header>
+      <div class="header-left">
+        <span id="siteTitle">Chickencams</span>
+        <div id="aggregatorStatusBar"></div>
+      </div>
+      <button class="settings-link" id="settingsToggle" type="button" aria-controls="settingsOverlay" aria-expanded="false">Settings</button>
+    </header>
 
-      <main class="grid grid-cols-1 gap-4 md:gap-5 p-6">
-        <p id="cameraEmptyState" class="text-xs text-zinc-500 hidden">No active streams right now.</p>
+    <main>
+      <p id="cameraEmptyState" class="hidden">No active streams.</p>
+      <section id="cameraGrid"></section>
+    </main>
 
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5" id="cameraGrid"></section>
-
-        <section class="bg-zinc-900/80 border border-zinc-800 rounded-lg p-4 settings-card" id="settingsCard">
-          <div class="settings-card-header">
-            <div>
-              <h2 class="text-sm font-semibold">Settings</h2>
-              <p class="text-xs text-zinc-400">Edit the site title, aggregator host, and camera names right from the dashboard.</p>
-            </div>
+    <div id="settingsOverlay" class="settings-overlay" aria-hidden="true">
+      <div class="settings-backdrop" data-settings-close="true"></div>
+      <section id="settingsCard" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-header">
+          <div class="settings-header-copy">
+            <h2 id="settingsTitle">Settings</h2>
+            <p>Edit title, aggregator host, and camera names.</p>
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-            <div>
-              <label class="text-xs text-zinc-400" for="siteTitleInput">Title text</label>
-              <input id="siteTitleInput" class="config-input" type="text" placeholder="Chickencams" />
+          <button class="settings-close" id="settingsClose" type="button" aria-label="Close settings">&times;</button>
+        </div>
+        <div class="settings-body">
+          <div class="settings-row">
+            <div class="field">
+              <label for="siteTitleInput">Title</label>
+              <input id="siteTitleInput" type="text" placeholder="Chickencams" />
             </div>
-            <div>
-              <label class="text-xs text-zinc-400" for="showTitleToggle">Show title</label>
-              <select id="showTitleToggle" class="config-input">
+            <div class="field">
+              <label for="showTitleToggle">Show title</label>
+              <select id="showTitleToggle">
                 <option value="true">Show</option>
                 <option value="false">Hide</option>
               </select>
             </div>
-            <div>
-              <label class="text-xs text-zinc-400" for="aggregatorHost">Aggregator IP / host</label>
-              <input id="aggregatorHost" class="config-input" type="text" placeholder="192.168.1.50" />
+            <div class="field">
+              <label for="aggregatorHost">Aggregator host</label>
+              <input id="aggregatorHost" type="text" placeholder="192.168.1.50" />
             </div>
           </div>
 
-          <div id="configList" class="config-list"></div>
-          <div class="config-actions">
-            <button class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" id="saveConfig" type="button">
-              Save configuration
-            </button>
-            <span class="text-xs text-zinc-400" id="configStatus"></span>
+          <div id="configList"></div>
+
+          <div class="settings-actions">
+            <button class="btn" id="saveConfig" type="button">Save</button>
+            <span id="configStatus"></span>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
     </div>
 
     <script>
-      const cameraGrid = document.getElementById("cameraGrid");
-      const siteTitle = document.getElementById("siteTitle");
+      const cameraGrid          = document.getElementById("cameraGrid");
+      const siteTitle           = document.getElementById("siteTitle");
       const aggregatorStatusBar = document.getElementById("aggregatorStatusBar");
-      const cameraEmptyState = document.getElementById("cameraEmptyState");
-      const configList = document.getElementById("configList");
-      const saveButton = document.getElementById("saveConfig");
-      const configStatus = document.getElementById("configStatus");
+      const cameraEmptyState    = document.getElementById("cameraEmptyState");
+      const configList          = document.getElementById("configList");
+      const saveButton          = document.getElementById("saveConfig");
+      const configStatus        = document.getElementById("configStatus");
       const aggregatorHostInput = document.getElementById("aggregatorHost");
-      const siteTitleInput = document.getElementById("siteTitleInput");
-      const showTitleToggle = document.getElementById("showTitleToggle");
+      const siteTitleInput      = document.getElementById("siteTitleInput");
+      const showTitleToggle     = document.getElementById("showTitleToggle");
+      const settingsToggle      = document.getElementById("settingsToggle");
+      const settingsOverlay     = document.getElementById("settingsOverlay");
+      const settingsCard        = document.getElementById("settingsCard");
+      const settingsClose       = document.getElementById("settingsClose");
 
       let cameras = [];
       let configState = null;
       const cameraCards = new Map();
+
+      function setSettingsOpen(isOpen) {
+        if (!settingsOverlay || !settingsToggle) return;
+        settingsOverlay.classList.toggle("open", isOpen);
+        settingsOverlay.setAttribute("aria-hidden", String(!isOpen));
+        settingsToggle.setAttribute("aria-expanded", String(isOpen));
+        document.body.style.overflow = isOpen ? "hidden" : "";
+        if (isOpen) {
+          window.setTimeout(() => aggregatorHostInput?.focus(), 0);
+        } else {
+          settingsToggle.focus();
+        }
+      }
 
       function buildCameraCard(camera) {
         const card = document.createElement("div");
@@ -461,16 +518,17 @@
         header.className = "camera-card-header";
 
         const title = document.createElement("span");
+        title.className = "cam-name";
         title.textContent = camera.name;
 
         const meta = document.createElement("span");
-        meta.className = "text-zinc-500";
+        meta.className = "cam-meta";
         meta.textContent = "— kbps";
 
         header.append(title, meta);
 
         const body = document.createElement("div");
-        body.className = "camera-card-body aspect-video";
+        body.className = "camera-card-body";
 
         const video = document.createElement("video");
         video.autoplay = true;
@@ -485,7 +543,6 @@
 
         body.append(video, placeholder);
         card.append(header, body);
-
         return { card, video, placeholder, meta, title };
       }
 
@@ -495,12 +552,8 @@
       }
 
       function showPlaceholder(placeholder, message) {
-        if (!placeholder) {
-          return;
-        }
-        if (message) {
-          placeholder.textContent = message;
-        }
+        if (!placeholder) return;
+        if (message) placeholder.textContent = message;
         placeholder.classList.remove("hidden");
       }
 
@@ -509,16 +562,9 @@
       }
 
       function attachPlaybackListeners(video, placeholder) {
-        if (!video || video.dataset.playbackListenersAttached === "true") {
-          return;
-        }
-        const markStreamReady = () => {
-          video.dataset.streamReady = "true";
-          hidePlaceholder(placeholder);
-        };
-        ["loadedmetadata", "loadeddata", "canplay", "playing", "timeupdate"].forEach((eventName) => {
-          video.addEventListener(eventName, markStreamReady);
-        });
+        if (!video || video.dataset.playbackListenersAttached === "true") return;
+        const markStreamReady = () => { video.dataset.streamReady = "true"; hidePlaceholder(placeholder); };
+        ["loadedmetadata", "loadeddata", "canplay", "playing", "timeupdate"].forEach(e => video.addEventListener(e, markStreamReady));
         video.dataset.playbackListenersAttached = "true";
       }
 
@@ -527,51 +573,36 @@
         card.dataset.state = state;
         card.classList.toggle("offline", state === "OFFLINE");
         card.classList.toggle("hidden", state === "OFFLINE");
-        if (state === "OFFLINE") {
-          hidePlaceholder(placeholder);
-          return;
-        }
-        if (state === "DEGRADED" && !isStreamRendering(video)) {
-          showPlaceholder(placeholder, "Signal degraded");
-          return;
-        }
+        if (state === "OFFLINE") { hidePlaceholder(placeholder); return; }
+        if (state === "DEGRADED" && !isStreamRendering(video)) { showPlaceholder(placeholder, "Signal degraded"); return; }
         hidePlaceholder(placeholder);
       }
 
       function updateCameraMeta(meta, health) {
-        if (!meta) {
-          return;
-        }
-        const bitrateKbps = Number.isFinite(health?.bitrateKbps) ? Math.round(health.bitrateKbps) : null;
-        meta.textContent = bitrateKbps != null ? `${bitrateKbps.toLocaleString()} kbps` : "— kbps";
+        if (!meta) return;
+        const kbps = Number.isFinite(health?.bitrateKbps) ? Math.round(health.bitrateKbps) : null;
+        meta.textContent = kbps != null ? `${kbps.toLocaleString()} kbps` : "— kbps";
       }
 
       function updateEmptyState() {
-        const activeCards = cameraGrid.querySelectorAll(".camera-card:not(.hidden)");
-        if (cameraEmptyState) {
-          cameraEmptyState.classList.toggle("hidden", activeCards.length > 0);
-        }
+        const active = cameraGrid.querySelectorAll(".camera-card:not(.hidden)");
+        cameraEmptyState?.classList.toggle("hidden", active.length > 0);
       }
 
       function renderAggregatorStatus(aggregators) {
-        if (!aggregatorStatusBar) {
-          return;
-        }
+        if (!aggregatorStatusBar) return;
         aggregatorStatusBar.innerHTML = "";
-        const onlineAggregators = (aggregators ?? []).filter(Boolean);
-        if (onlineAggregators.length === 0) {
-          aggregatorStatusBar.classList.add("hidden");
-          return;
-        }
+        const online = (aggregators ?? []).filter(Boolean);
+        if (!online.length) { aggregatorStatusBar.classList.add("hidden"); return; }
         aggregatorStatusBar.classList.remove("hidden");
-        onlineAggregators.forEach((aggregator) => {
+        online.forEach(agg => {
           const pill = document.createElement("span");
           pill.className = "status-pill online";
           const name = document.createElement("span");
-          name.textContent = aggregator.hostname || "Aggregator";
+          name.textContent = agg.hostname || "Aggregator";
           const ip = document.createElement("span");
           ip.className = "status-pill-ip";
-          ip.textContent = aggregator.ip ? ` · ${aggregator.ip}` : "";
+          ip.textContent = agg.ip ? ` · ${agg.ip}` : "";
           pill.append(name, ip);
           aggregatorStatusBar.appendChild(pill);
         });
@@ -592,78 +623,39 @@
       function attachLiveStream(video, cameraId, placeholder) {
         const streamUrl = `/streams/${cameraId}/master.m3u8`;
         attachPlaybackListeners(video, placeholder);
-        const markStreamReady = () => {
-          video.dataset.streamReady = "true";
-          hidePlaceholder(placeholder);
-        };
+        const markStreamReady = () => { video.dataset.streamReady = "true"; hidePlaceholder(placeholder); };
         let retryTimeout = null;
         const scheduleRetry = () => {
-          if (retryTimeout) {
-            return;
-          }
-          retryTimeout = window.setTimeout(() => {
-            retryTimeout = null;
-            attachLiveStream(video, cameraId, placeholder);
-          }, 3000);
+          if (retryTimeout) return;
+          retryTimeout = window.setTimeout(() => { retryTimeout = null; attachLiveStream(video, cameraId, placeholder); }, 3000);
         };
-
         if (window.Hls && Hls.isSupported()) {
-          const hls = new Hls({
-            lowLatencyMode: true,
-            backBufferLength: 300,
-            maxBufferLength: 300,
-            maxMaxBufferLength: 300,
-            maxLiveSyncPlaybackRate: 1.3,
-            liveSyncDurationCount: 1,
-            liveMaxLatencyDurationCount: 2
-          });
+          const hls = new Hls({ lowLatencyMode: true, backBufferLength: 300, maxBufferLength: 300, maxMaxBufferLength: 300, maxLiveSyncPlaybackRate: 1.3, liveSyncDurationCount: 1, liveMaxLatencyDurationCount: 2 });
           hls.loadSource(streamUrl);
           hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            markStreamReady();
-          });
+          hls.on(Hls.Events.MANIFEST_PARSED, () => markStreamReady());
           hls.on(Hls.Events.ERROR, (_event, data) => {
-            if (!isStreamRendering(video)) {
-              showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
-            }
+            if (!isStreamRendering(video)) showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
             if (data?.fatal) {
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                hls.startLoad();
-                scheduleRetry();
-                return;
-              }
-              if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                hls.recoverMediaError();
-                scheduleRetry();
-                return;
-              }
-              hls.destroy();
-              scheduleRetry();
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { hls.startLoad(); scheduleRetry(); return; }
+              if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { hls.recoverMediaError(); scheduleRetry(); return; }
+              hls.destroy(); scheduleRetry();
             }
           });
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           video.src = streamUrl;
           video.addEventListener("error", () => {
-            if (!isStreamRendering(video)) {
-              showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
-            }
+            if (!isStreamRendering(video)) showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
             scheduleRetry();
           });
         }
       }
 
       function parseSrtSource(source) {
-        if (typeof source !== "string") {
-          return null;
-        }
+        if (typeof source !== "string") return null;
         const match = source.match(/^srt:\/\/([^:/?]+)(?::(\d+))?/i);
-        if (!match) {
-          return null;
-        }
-        return {
-          host: match[1] ?? "",
-          port: match[2] ? Number.parseInt(match[2], 10) : null
-        };
+        if (!match) return null;
+        return { host: match[1] ?? "", port: match[2] ? Number.parseInt(match[2], 10) : null };
       }
 
       function createCameraRow(camera) {
@@ -677,8 +669,7 @@
         const nameField = document.createElement("div");
         nameField.className = "config-field";
         const nameLabel = document.createElement("label");
-        nameLabel.className = "text-xs text-zinc-400";
-        nameLabel.textContent = "Camera name";
+        nameLabel.textContent = "Name";
         const nameInput = document.createElement("input");
         nameInput.className = "config-input";
         nameInput.type = "text";
@@ -703,7 +694,6 @@
         const portField = document.createElement("div");
         portField.className = "config-field";
         const portLabel = document.createElement("label");
-        portLabel.className = "text-xs text-zinc-400";
         portLabel.textContent = "Port";
         const portInput = document.createElement("input");
         portInput.className = "config-input";
@@ -727,167 +717,100 @@
           siteTitle.classList.toggle("hidden", ui.showTitle === false);
           siteTitle.textContent = ui.showTitle === false ? "" : titleText;
         }
-        if (siteTitleInput) {
-          siteTitleInput.value = titleText;
-        }
-        if (showTitleToggle) {
-          showTitleToggle.value = ui.showTitle === false ? "false" : "true";
-        }
+        if (siteTitleInput) siteTitleInput.value = titleText;
+        if (showTitleToggle) showTitleToggle.value = ui.showTitle === false ? "false" : "true";
       }
 
       function populateSettingsForm(data) {
-        if (!configList) {
-          return;
-        }
-        const fallbackHost = data.cameras
-          ?.map((camera) => parseSrtSource(camera.source)?.host)
-          ?.find((host) => host);
-        if (aggregatorHostInput) {
-          aggregatorHostInput.value = data.ingestHost || fallbackHost || "";
-        }
+        if (!configList) return;
+        const fallbackHost = data.cameras?.map(c => parseSrtSource(c.source)?.host)?.find(h => h);
+        if (aggregatorHostInput) aggregatorHostInput.value = data.ingestHost || fallbackHost || "";
         configList.innerHTML = "";
-        (data.cameras ?? []).forEach((camera) => {
+        (data.cameras ?? []).forEach(camera => {
           const parsed = parseSrtSource(camera.source);
           configList.appendChild(createCameraRow({ ...camera, port: parsed?.port ?? "" }));
         });
       }
 
       async function fetchConfig() {
-        try {
-          const response = await fetch("/api/config");
-          if (!response.ok) {
-            return null;
-          }
-          return await response.json();
-        } catch (error) {
-          return null;
-        }
+        try { const res = await fetch("/api/config"); if (!res.ok) return null; return await res.json(); }
+        catch { return null; }
       }
 
       async function loadUiConfig() {
         const data = await fetchConfig();
-        if (!data) {
-          if (configStatus) {
-            configStatus.textContent = "Unable to load config.";
-          }
-          return;
-        }
+        if (!data) { if (configStatus) configStatus.textContent = "Unable to load config."; return; }
         configState = data;
         applyUiConfig(data);
         populateSettingsForm(data);
       }
 
       async function saveConfig() {
-        if (!configState || !configList) {
-          if (configStatus) {
-            configStatus.textContent = "Config not loaded.";
-          }
-          return;
-        }
+        if (!configState || !configList) { if (configStatus) configStatus.textContent = "Config not loaded."; return; }
+        if (configStatus) configStatus.textContent = "Saving…";
+        if (saveButton) saveButton.disabled = true;
 
-        if (configStatus) {
-          configStatus.textContent = "Saving...";
-        }
-        if (saveButton) {
-          saveButton.disabled = true;
-        }
-
-        const camerasPayload = (configState.cameras ?? []).map((camera) => {
+        const camerasPayload = (configState.cameras ?? []).map(camera => {
           const enabled = configList.querySelector(`input[type=checkbox][data-camera="${camera.id}"]`);
-          const port = configList.querySelector(`input[type=number][data-camera="${camera.id}"][data-field="port"]`);
-          const nameInput = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="name"]`);
-          return {
-            ...camera,
-            name: nameInput?.value ?? camera.name,
-            enabled: enabled?.checked ?? camera.enabled,
-            port: port?.value ?? ""
-          };
+          const port    = configList.querySelector(`input[type=number][data-camera="${camera.id}"][data-field="port"]`);
+          const nameIn  = configList.querySelector(`input[type=text][data-camera="${camera.id}"][data-field="name"]`);
+          return { ...camera, name: nameIn?.value ?? camera.name, enabled: enabled?.checked ?? camera.enabled, port: port?.value ?? "" };
         });
 
         try {
-          const response = await fetch("/api/config", {
+          const res = await fetch("/api/config", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               ...configState,
-              ui: {
-                ...(configState.ui ?? {}),
-                title: siteTitleInput?.value ?? configState.ui?.title ?? "Chickencams",
-                showTitle: showTitleToggle?.value !== "false"
-              },
+              ui: { ...(configState.ui ?? {}), title: siteTitleInput?.value ?? configState.ui?.title ?? "Chickencams", showTitle: showTitleToggle?.value !== "false" },
               ingestHost: aggregatorHostInput?.value ?? configState.ingestHost,
-              cameras: camerasPayload
-            })
+              cameras: camerasPayload,
+            }),
           });
-
-          if (!response.ok) {
-            throw new Error("Save failed");
-          }
-
-          const result = await response.json();
+          if (!res.ok) throw new Error("Save failed");
+          const result = await res.json();
           configState = result.config ?? configState;
           applyUiConfig(configState);
           populateSettingsForm(configState);
-          if (configStatus) {
-            configStatus.textContent = "Saved.";
-          }
+          if (configStatus) configStatus.textContent = "Saved.";
           await refreshDashboard();
-        } catch (error) {
-          if (configStatus) {
-            configStatus.textContent = "Save failed.";
-          }
+        } catch {
+          if (configStatus) configStatus.textContent = "Save failed.";
         } finally {
-          if (saveButton) {
-            saveButton.disabled = false;
-          }
+          if (saveButton) saveButton.disabled = false;
         }
       }
 
       async function loadCameras() {
         try {
-          const response = await fetch("/api/cameras");
-          if (!response.ok) {
-            throw new Error("Camera list unavailable");
-          }
-          const data = await response.json();
-          cameras = (data.cameras ?? []).filter((camera) => camera.enabled);
-        } catch (error) {
-          updateEmptyState();
-          return false;
-        }
+          const res = await fetch("/api/cameras");
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          cameras = (data.cameras ?? []).filter(c => c.enabled);
+        } catch { updateEmptyState(); return false; }
 
-        const currentCameraIds = new Set(cameras.map((camera) => camera.id));
-        for (const [cameraId, entry] of cameraCards.entries()) {
-          if (!currentCameraIds.has(cameraId)) {
-            entry.card.remove();
-            cameraCards.delete(cameraId);
-          }
+        const currentIds = new Set(cameras.map(c => c.id));
+        for (const [id, entry] of cameraCards.entries()) {
+          if (!currentIds.has(id)) { entry.card.remove(); cameraCards.delete(id); }
         }
-
-        cameras.forEach((camera) => {
+        cameras.forEach(camera => {
           const entry = upsertCameraCard(camera);
           updateCameraMeta(entry.meta, camera.health);
           updateCameraStatus(entry.card, entry.video, entry.placeholder, camera.health);
         });
-
         updateEmptyState();
         return true;
       }
 
       async function loadAggregators() {
         try {
-          const response = await fetch("/api/aggregators");
-          if (!response.ok) {
-            return false;
-          }
-          const data = await response.json();
+          const res = await fetch("/api/aggregators");
+          if (!res.ok) return false;
+          const data = await res.json();
           renderAggregatorStatus(data.aggregators ?? []);
           return true;
-        } catch (error) {
-          return false;
-        }
+        } catch { return false; }
       }
 
       async function refreshDashboard() {
@@ -896,12 +819,24 @@
 
       refreshDashboard();
       loadUiConfig();
-
       saveButton?.addEventListener("click", saveConfig);
-
-      setInterval(async () => {
-        refreshDashboard();
-      }, 5000);
+      settingsToggle?.addEventListener("click", () => {
+        const isOpen = settingsOverlay?.classList.contains("open");
+        setSettingsOpen(!isOpen);
+      });
+      settingsClose?.addEventListener("click", () => setSettingsOpen(false));
+      settingsOverlay?.addEventListener("click", (event) => {
+        if (event.target instanceof HTMLElement && event.target.dataset.settingsClose === "true") {
+          setSettingsOpen(false);
+        }
+      });
+      settingsCard?.addEventListener("click", (event) => event.stopPropagation());
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && settingsOverlay?.classList.contains("open")) {
+          setSettingsOpen(false);
+        }
+      });
+      setInterval(refreshDashboard, 5000);
     </script>
   </body>
 </html>
