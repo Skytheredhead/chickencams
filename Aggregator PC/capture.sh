@@ -14,8 +14,8 @@ MAX_FPS=${MAX_FPS:-10}
 VIDEO_RATE_MODE=${VIDEO_RATE_MODE:-vbr}
 VIDEO_CRF=${VIDEO_CRF:-23}
 VIDEO_BITRATE_KBPS=${VIDEO_BITRATE_KBPS:-3000}
-VIDEO_MAXRATE_KBPS=${VIDEO_MAXRATE_KBPS:-4500}
-VIDEO_BUFSIZE_KBPS=${VIDEO_BUFSIZE_KBPS:-9000}
+VIDEO_MAXRATE_KBPS=${VIDEO_MAXRATE_KBPS:-}
+VIDEO_BUFSIZE_KBPS=${VIDEO_BUFSIZE_KBPS:-}
 
 mkdir -p "${LOG_DIR}"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -73,7 +73,7 @@ INPUT_FPS=$(detect_camera_fps)
 if [[ -n "${AUDIO_DEVICE}" ]]; then
   log "Audio device: ${AUDIO_DEVICE}"
 fi
-log "Capture settings: device=${DEVICE}, fps=${INPUT_FPS}, max_fps=${MAX_FPS}, rate_mode=${VIDEO_RATE_MODE}, server=${SERVER_HOST}:${SERVER_PORT}"
+log "Capture settings: device=${DEVICE}, fps=${INPUT_FPS}, max_fps=${MAX_FPS}, rate_mode=${VIDEO_RATE_MODE}, crf=${VIDEO_CRF}, maxrate=${VIDEO_MAXRATE_KBPS:-none}, bufsize=${VIDEO_BUFSIZE_KBPS:-none}, server=${SERVER_HOST}:${SERVER_PORT}"
 if command -v v4l2-ctl >/dev/null 2>&1; then
   log "Device formats: $(v4l2-ctl --device "${DEVICE}" --list-formats-ext 2>/dev/null | tr '\n' ' ')"
 fi
@@ -92,9 +92,16 @@ fi
 
 VIDEO_RATE_ARGS=()
 if [[ "${VIDEO_RATE_MODE}" == "cbr" ]]; then
-  VIDEO_RATE_ARGS=(-b:v "${VIDEO_BITRATE_KBPS}k" -maxrate "${VIDEO_BITRATE_KBPS}k" -bufsize "${VIDEO_BUFSIZE_KBPS}k")
+  TARGET_BUFSIZE_KBPS=${VIDEO_BUFSIZE_KBPS:-$((VIDEO_BITRATE_KBPS * 2))}
+  VIDEO_RATE_ARGS=(-b:v "${VIDEO_BITRATE_KBPS}k" -maxrate "${VIDEO_BITRATE_KBPS}k" -bufsize "${TARGET_BUFSIZE_KBPS}k")
 else
-  VIDEO_RATE_ARGS=(-crf "${VIDEO_CRF}" -maxrate "${VIDEO_MAXRATE_KBPS}k" -bufsize "${VIDEO_BUFSIZE_KBPS}k")
+  VIDEO_RATE_ARGS=(-crf "${VIDEO_CRF}")
+  if [[ -n "${VIDEO_MAXRATE_KBPS}" ]]; then
+    VIDEO_RATE_ARGS+=(-maxrate "${VIDEO_MAXRATE_KBPS}k")
+  fi
+  if [[ -n "${VIDEO_BUFSIZE_KBPS}" ]]; then
+    VIDEO_RATE_ARGS+=(-bufsize "${VIDEO_BUFSIZE_KBPS}k")
+  fi
 fi
 
 exec ffmpeg \

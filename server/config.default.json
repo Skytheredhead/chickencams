@@ -64,33 +64,33 @@
         "name": "master",
         "resolution": "1280x720",
         "fps": 10,
-        "bitrateKbps": 2000,
-        "maxrateKbps": 2200,
-        "bufsizeKbps": 4000
+        "rateMode": "vbr",
+        "crf": 20,
+        "bitrateKbps": 2000
       },
       {
         "name": "high",
         "resolution": "1280x720",
         "fps": 10,
-        "bitrateKbps": 1000,
-        "maxrateKbps": 1100,
-        "bufsizeKbps": 2000
+        "rateMode": "vbr",
+        "crf": 23,
+        "bitrateKbps": 1000
       },
       {
         "name": "mid",
         "resolution": "1280x720",
         "fps": 10,
-        "bitrateKbps": 500,
-        "maxrateKbps": 600,
-        "bufsizeKbps": 1200
+        "rateMode": "vbr",
+        "crf": 27,
+        "bitrateKbps": 500
       },
       {
         "name": "low",
         "resolution": "640x360",
         "fps": 10,
-        "bitrateKbps": 100,
-        "maxrateKbps": 120,
-        "bufsizeKbps": 300
+        "rateMode": "vbr",
+        "crf": 31,
+        "bitrateKbps": 100
       }
     ]
   }

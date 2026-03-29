@@ -113,6 +113,75 @@ function buildSrtSource(ingestHost, port, fallbackSource) {
   return `srt://${host}:${port}?mode=listener`;
 }
 
+function parseOptionalInteger(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeRateMode(value, fallback = "cbr") {
+  return normalizeString(value).toLowerCase() === "vbr" ? "vbr" : fallback;
+}
+
+function getAbrVariant(index) {
+  const variant = Array.isArray(config.hls?.abr) ? config.hls.abr[index] ?? {} : {};
+  return {
+    rateMode: normalizeRateMode(variant.rateMode, "vbr"),
+    bitrateKbps: parseOptionalInteger(variant.bitrateKbps),
+    maxrateKbps: parseOptionalInteger(variant.maxrateKbps),
+    bufsizeKbps: parseOptionalInteger(variant.bufsizeKbps),
+    crf: parseOptionalInteger(variant.crf),
+    fps: parseOptionalInteger(variant.fps)
+  };
+}
+
+function appendRateSettingsEnv(target, prefix, variant) {
+  target[`${prefix}_RATE_MODE`] = variant.rateMode;
+  if (Number.isFinite(variant.bitrateKbps)) {
+    target[`${prefix}_BITRATE_KBPS`] = String(variant.bitrateKbps);
+  }
+  if (Number.isFinite(variant.maxrateKbps)) {
+    target[`${prefix}_MAXRATE_KBPS`] = String(variant.maxrateKbps);
+  }
+  if (Number.isFinite(variant.bufsizeKbps)) {
+    target[`${prefix}_BUFSIZE_KBPS`] = String(variant.bufsizeKbps);
+  }
+  if (Number.isFinite(variant.crf)) {
+    target[`${prefix}_CRF`] = String(variant.crf);
+  }
+  if (Number.isFinite(variant.fps)) {
+    target[`${prefix}_FPS`] = String(variant.fps);
+  }
+}
+
+function buildHlsEncoderEnv() {
+  const env = {};
+  for (let index = 0; index < 4; index += 1) {
+    appendRateSettingsEnv(env, `HLS_VARIANT_${index}`, getAbrVariant(index));
+  }
+  appendRateSettingsEnv(env, "RECORD", getAbrVariant(0));
+
+  if (Number.isFinite(config.hls?.segmentDurationSeconds)) {
+    env.HLS_SEGMENT_TIME = String(config.hls.segmentDurationSeconds);
+  }
+  if (Number.isFinite(config.hls?.livePlaylistSize)) {
+    env.HLS_PLAYLIST_SIZE = String(config.hls.livePlaylistSize);
+  }
+  if (Number.isFinite(config.hls?.recordingSegmentSeconds)) {
+    env.RECORD_SEGMENT_TIME = String(config.hls.recordingSegmentSeconds);
+  }
+
+  return env;
+}
+
+function buildRecordingEncoderEnv() {
+  const env = {};
+  appendRateSettingsEnv(env, "VIDEO", getAbrVariant(0));
+  if (Number.isFinite(config.hls?.recordingSegmentSeconds)) {
+    env.RECORD_SEGMENT_TIME = String(config.hls.recordingSegmentSeconds);
+  }
+  return env;
+}
+
 const recordingSafetyBufferSeconds = Number.isFinite(config.hls.recordingSafetyBufferSeconds)
   ? config.hls.recordingSafetyBufferSeconds
   : 5;
@@ -152,9 +221,15 @@ function hasCommand(command) {
   return result.status === 0;
 }
 
-function spawnEncoder(scriptName, args, label) {
+function spawnEncoder(scriptName, args, label, env = {}) {
   const scriptPath = path.join(encoderRoot, scriptName);
-  const child = spawn(scriptPath, args, { stdio: "inherit" });
+  const child = spawn(scriptPath, args, {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      ...env
+    }
+  });
   encoderProcesses.set(label, child);
   child.on("close", (code) => {
     encoderProcesses.delete(label);
@@ -282,7 +357,12 @@ async function startCameraEncoders() {
     }
     if (!encoderProcesses.has(hlsLabel)) {
       const recordingsArg = isSrtListener(camera.source) ? recordingsRoot : "";
-      spawnEncoder("encode_hls.sh", [camera.id, camera.source, streamsRoot, recordingsArg], hlsLabel);
+      spawnEncoder(
+        "encode_hls.sh",
+        [camera.id, camera.source, streamsRoot, recordingsArg],
+        hlsLabel,
+        buildHlsEncoderEnv()
+      );
     }
     if (isSrtListener(camera.source)) {
       console.warn(
@@ -291,7 +371,12 @@ async function startCameraEncoders() {
       continue;
     }
     if (!encoderProcesses.has(recordLabel)) {
-      spawnEncoder("record_segments.sh", [camera.id, camera.source, recordingsRoot], recordLabel);
+      spawnEncoder(
+        "record_segments.sh",
+        [camera.id, camera.source, recordingsRoot],
+        recordLabel,
+        buildRecordingEncoderEnv()
+      );
     }
   }
 }
@@ -403,7 +488,7 @@ app.get("/api/aggregators", (req, res) => {
 });
 
 app.get("/config", (req, res) => {
-  res.sendFile(path.join(publicDir, "config.html"));
+  res.redirect("/");
 });
 
 app.get("/api/config", requireApiToken, (req, res) => {
@@ -441,7 +526,7 @@ app.post("/api/config", requireApiToken, (req, res) => {
   fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
   fs.writeFileSync(cameraRegistryPath, JSON.stringify({ cameras: updated.cameras }, null, 2));
   config = updated;
-  res.json({ status: "ok" });
+  res.json({ status: "ok", config: updated });
 });
 
 app.get("/api/cameras", (req, res) => {

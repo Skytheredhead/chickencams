@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chickencams</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./app.css" />
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15"></script>
   </head>
@@ -15,7 +16,7 @@
           <div id="aggregatorStatusBar" class="aggregator-status-bar"></div>
         </div>
         <div class="flex items-center gap-3">
-          <a class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" href="/config">
+          <a class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" href="#settingsCard">
             Settings
           </a>
         </div>
@@ -25,6 +26,41 @@
         <p id="cameraEmptyState" class="text-xs text-zinc-500 hidden">No active streams right now.</p>
 
         <section class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5" id="cameraGrid"></section>
+
+        <section class="bg-zinc-900/80 border border-zinc-800 rounded-lg p-4 settings-card" id="settingsCard">
+          <div class="settings-card-header">
+            <div>
+              <h2 class="text-sm font-semibold">Settings</h2>
+              <p class="text-xs text-zinc-400">Edit the site title, aggregator host, and camera names right from the dashboard.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+            <div>
+              <label class="text-xs text-zinc-400" for="siteTitleInput">Title text</label>
+              <input id="siteTitleInput" class="config-input" type="text" placeholder="Chickencams" />
+            </div>
+            <div>
+              <label class="text-xs text-zinc-400" for="showTitleToggle">Show title</label>
+              <select id="showTitleToggle" class="config-input">
+                <option value="true">Show</option>
+                <option value="false">Hide</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-zinc-400" for="aggregatorHost">Aggregator IP / host</label>
+              <input id="aggregatorHost" class="config-input" type="text" placeholder="192.168.1.50" />
+            </div>
+          </div>
+
+          <div id="configList" class="config-list"></div>
+          <div class="config-actions">
+            <button class="rounded-md border border-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-800 transition" id="saveConfig" type="button">
+              Save configuration
+            </button>
+            <span class="text-xs text-zinc-400" id="configStatus"></span>
+          </div>
+        </section>
       </main>
     </div>
 

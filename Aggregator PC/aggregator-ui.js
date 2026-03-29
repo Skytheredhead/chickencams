@@ -27,6 +27,11 @@ const defaultRegistry = {
 const running = new Map();
 let lastStartAt = 0;
 
+app.get("/favicon.svg", (_req, res) => {
+  res.type("image/svg+xml");
+  res.sendFile(path.join(__dirname, "favicon.svg"));
+});
+
 function stopCaptureProcess(session) {
   if (!session?.process) {
     return;
@@ -145,6 +150,7 @@ const renderPage = (message = "") => {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Chickencams Aggregator</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
       :root {
         color-scheme: light dark;

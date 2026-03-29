@@ -12,6 +12,9 @@ PRESET="p4"
 TUNE=()
 PIX_FMT="yuv420p"
 SC_THRESHOLD=()
+HLS_SEGMENT_TIME=${HLS_SEGMENT_TIME:-1}
+HLS_PLAYLIST_SIZE=${HLS_PLAYLIST_SIZE:-300}
+RECORD_SEGMENT_TIME=${RECORD_SEGMENT_TIME:-60}
 
 supports_nvenc() {
   command -v nvidia-smi >/dev/null 2>&1 || return 1
@@ -39,6 +42,95 @@ if ! supports_nvenc; then
   TUNE=(-tune zerolatency)
   SC_THRESHOLD=(-sc_threshold 0)
 fi
+
+get_setting() {
+  local key=${1}
+  local fallback=${2:-}
+  printf '%s' "${!key:-${fallback}}"
+}
+
+set_rate_args() {
+  local -n output_ref=$1
+  local stream_specifier=$2
+  local encoder=$3
+  local rate_mode=$4
+  local bitrate_kbps=$5
+  local maxrate_kbps=$6
+  local bufsize_kbps=$7
+  local crf=$8
+
+  output_ref=()
+  if [[ "${rate_mode}" == "vbr" ]]; then
+    if [[ "${encoder}" == "h264_nvenc" ]]; then
+      output_ref=("-rc:v${stream_specifier}" vbr "-cq:v${stream_specifier}" "${crf}" "-b:v${stream_specifier}" 0)
+    else
+      output_ref=("-crf:v${stream_specifier}" "${crf}")
+    fi
+    if [[ -n "${maxrate_kbps}" ]]; then
+      output_ref+=("-maxrate:v${stream_specifier}" "${maxrate_kbps}k")
+    fi
+    if [[ -n "${bufsize_kbps}" ]]; then
+      output_ref+=("-bufsize:v${stream_specifier}" "${bufsize_kbps}k")
+    fi
+    return
+  fi
+
+  local target_bitrate=${bitrate_kbps:-2000}
+  local target_maxrate=${maxrate_kbps:-${target_bitrate}}
+  local target_bufsize=${bufsize_kbps:-$((target_maxrate * 2))}
+  if [[ "${encoder}" == "h264_nvenc" ]]; then
+    output_ref=("-rc:v${stream_specifier}" cbr "-b:v${stream_specifier}" "${target_bitrate}k" "-maxrate:v${stream_specifier}" "${target_maxrate}k" "-bufsize:v${stream_specifier}" "${target_bufsize}k")
+  else
+    output_ref=("-b:v${stream_specifier}" "${target_bitrate}k" "-maxrate:v${stream_specifier}" "${target_maxrate}k" "-bufsize:v${stream_specifier}" "${target_bufsize}k")
+  fi
+}
+
+VARIANT_0_RATE_MODE=$(get_setting HLS_VARIANT_0_RATE_MODE vbr)
+VARIANT_0_BITRATE_KBPS=$(get_setting HLS_VARIANT_0_BITRATE_KBPS 2000)
+VARIANT_0_MAXRATE_KBPS=$(get_setting HLS_VARIANT_0_MAXRATE_KBPS)
+VARIANT_0_BUFSIZE_KBPS=$(get_setting HLS_VARIANT_0_BUFSIZE_KBPS)
+VARIANT_0_CRF=$(get_setting HLS_VARIANT_0_CRF 20)
+VARIANT_0_FPS=$(get_setting HLS_VARIANT_0_FPS 10)
+
+VARIANT_1_RATE_MODE=$(get_setting HLS_VARIANT_1_RATE_MODE vbr)
+VARIANT_1_BITRATE_KBPS=$(get_setting HLS_VARIANT_1_BITRATE_KBPS 1000)
+VARIANT_1_MAXRATE_KBPS=$(get_setting HLS_VARIANT_1_MAXRATE_KBPS)
+VARIANT_1_BUFSIZE_KBPS=$(get_setting HLS_VARIANT_1_BUFSIZE_KBPS)
+VARIANT_1_CRF=$(get_setting HLS_VARIANT_1_CRF 23)
+VARIANT_1_FPS=$(get_setting HLS_VARIANT_1_FPS 10)
+
+VARIANT_2_RATE_MODE=$(get_setting HLS_VARIANT_2_RATE_MODE vbr)
+VARIANT_2_BITRATE_KBPS=$(get_setting HLS_VARIANT_2_BITRATE_KBPS 500)
+VARIANT_2_MAXRATE_KBPS=$(get_setting HLS_VARIANT_2_MAXRATE_KBPS)
+VARIANT_2_BUFSIZE_KBPS=$(get_setting HLS_VARIANT_2_BUFSIZE_KBPS)
+VARIANT_2_CRF=$(get_setting HLS_VARIANT_2_CRF 27)
+VARIANT_2_FPS=$(get_setting HLS_VARIANT_2_FPS 10)
+
+VARIANT_3_RATE_MODE=$(get_setting HLS_VARIANT_3_RATE_MODE vbr)
+VARIANT_3_BITRATE_KBPS=$(get_setting HLS_VARIANT_3_BITRATE_KBPS 100)
+VARIANT_3_MAXRATE_KBPS=$(get_setting HLS_VARIANT_3_MAXRATE_KBPS)
+VARIANT_3_BUFSIZE_KBPS=$(get_setting HLS_VARIANT_3_BUFSIZE_KBPS)
+VARIANT_3_CRF=$(get_setting HLS_VARIANT_3_CRF 31)
+VARIANT_3_FPS=$(get_setting HLS_VARIANT_3_FPS 10)
+
+RECORD_RATE_MODE=$(get_setting RECORD_RATE_MODE "${VARIANT_0_RATE_MODE}")
+RECORD_BITRATE_KBPS=$(get_setting RECORD_BITRATE_KBPS "${VARIANT_0_BITRATE_KBPS}")
+RECORD_MAXRATE_KBPS=$(get_setting RECORD_MAXRATE_KBPS "${VARIANT_0_MAXRATE_KBPS}")
+RECORD_BUFSIZE_KBPS=$(get_setting RECORD_BUFSIZE_KBPS "${VARIANT_0_BUFSIZE_KBPS}")
+RECORD_CRF=$(get_setting RECORD_CRF "${VARIANT_0_CRF}")
+RECORD_FPS=$(get_setting RECORD_FPS "${VARIANT_0_FPS}")
+
+set_rate_args RECORD_RATE_ARGS "" "${ENCODER}" "${RECORD_RATE_MODE}" "${RECORD_BITRATE_KBPS}" "${RECORD_MAXRATE_KBPS}" "${RECORD_BUFSIZE_KBPS}" "${RECORD_CRF}"
+set_rate_args VARIANT_0_RATE_ARGS ":0" "${ENCODER}" "${VARIANT_0_RATE_MODE}" "${VARIANT_0_BITRATE_KBPS}" "${VARIANT_0_MAXRATE_KBPS}" "${VARIANT_0_BUFSIZE_KBPS}" "${VARIANT_0_CRF}"
+set_rate_args VARIANT_1_RATE_ARGS ":1" "${ENCODER}" "${VARIANT_1_RATE_MODE}" "${VARIANT_1_BITRATE_KBPS}" "${VARIANT_1_MAXRATE_KBPS}" "${VARIANT_1_BUFSIZE_KBPS}" "${VARIANT_1_CRF}"
+set_rate_args VARIANT_2_RATE_ARGS ":2" "${ENCODER}" "${VARIANT_2_RATE_MODE}" "${VARIANT_2_BITRATE_KBPS}" "${VARIANT_2_MAXRATE_KBPS}" "${VARIANT_2_BUFSIZE_KBPS}" "${VARIANT_2_CRF}"
+set_rate_args VARIANT_3_RATE_ARGS ":3" "${ENCODER}" "${VARIANT_3_RATE_MODE}" "${VARIANT_3_BITRATE_KBPS}" "${VARIANT_3_MAXRATE_KBPS}" "${VARIANT_3_BUFSIZE_KBPS}" "${VARIANT_3_CRF}"
+
+VARIANT_0_GOP=$((VARIANT_0_FPS * HLS_SEGMENT_TIME))
+VARIANT_1_GOP=$((VARIANT_1_FPS * HLS_SEGMENT_TIME))
+VARIANT_2_GOP=$((VARIANT_2_FPS * HLS_SEGMENT_TIME))
+VARIANT_3_GOP=$((VARIANT_3_FPS * HLS_SEGMENT_TIME))
+RECORD_GOP=${RECORD_FPS}
 
 AUDIO_PRESENT=false
 if command -v ffprobe >/dev/null 2>&1; then
@@ -78,17 +170,15 @@ if [[ -n "${RECORDINGS_DIR}" ]]; then
     -preset "${PRESET}"
     "${TUNE[@]}"
     -pix_fmt:v "${PIX_FMT}"
-    -b:v 2000k
-    -maxrate 2200k
-    -bufsize 4000k
-    -r 10
-    -g 10
-    -keyint_min 10
+    "${RECORD_RATE_ARGS[@]}"
+    -r "${RECORD_FPS}"
+    -g "${RECORD_GOP}"
+    -keyint_min "${RECORD_GOP}"
     "${SC_THRESHOLD[@]}"
-    -force_key_frames:v "expr:gte(t,n_forced*1)"
+    -force_key_frames:v "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})"
     "${AUDIO_CODEC[@]}"
     -f segment
-    -segment_time 60
+    -segment_time "${RECORD_SEGMENT_TIME}"
     -reset_timestamps 1
     -strftime 1
     "${RECORDINGS_DIR}/${CAMERA_ID}/%s.mp4"
@@ -113,15 +203,15 @@ ffmpeg \
   -strict experimental \
   -i "${SOURCE_URL}" \
   -filter_complex "[0:v]${TIMESTAMP_FILTER},${IMAGE_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
-  -map "[v1]" -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:0 "${PIX_FMT}" -b:v:0 2000k -maxrate:v:0 2200k -bufsize:v:0 4000k -r:v:0 10 -g:v:0 10 -keyint_min:v:0 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:0 "expr:gte(t,n_forced*1)" \
-  -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:1 "${PIX_FMT}" -b:v:1 1000k -maxrate:v:1 1100k -bufsize:v:1 2000k -r:v:1 10 -g:v:1 10 -keyint_min:v:1 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:1 "expr:gte(t,n_forced*1)" \
-  -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:2 "${PIX_FMT}" -b:v:2 500k -maxrate:v:2 600k -bufsize:v:2 1200k -r:v:2 10 -g:v:2 10 -keyint_min:v:2 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:2 "expr:gte(t,n_forced*1)" \
-  -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:3 "${PIX_FMT}" -b:v:3 100k -maxrate:v:3 120k -bufsize:v:3 300k -r:v:3 10 -g:v:3 10 -keyint_min:v:3 10 "${SC_THRESHOLD[@]}" -force_key_frames:v:3 "expr:gte(t,n_forced*1)" \
+  -map "[v1]" -c:v:0 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:0 "${PIX_FMT}" "${VARIANT_0_RATE_ARGS[@]}" -r:v:0 "${VARIANT_0_FPS}" -g:v:0 "${VARIANT_0_GOP}" -keyint_min:v:0 "${VARIANT_0_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:0 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
+  -map "[v2]" -c:v:1 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:1 "${PIX_FMT}" "${VARIANT_1_RATE_ARGS[@]}" -r:v:1 "${VARIANT_1_FPS}" -g:v:1 "${VARIANT_1_GOP}" -keyint_min:v:1 "${VARIANT_1_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:1 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
+  -map "[v3]" -c:v:2 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:2 "${PIX_FMT}" "${VARIANT_2_RATE_ARGS[@]}" -r:v:2 "${VARIANT_2_FPS}" -g:v:2 "${VARIANT_2_GOP}" -keyint_min:v:2 "${VARIANT_2_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:2 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
+  -map "[v4]" -c:v:3 "${ENCODER}" -preset "${PRESET}" "${TUNE[@]}" -pix_fmt:v:3 "${PIX_FMT}" "${VARIANT_3_RATE_ARGS[@]}" -r:v:3 "${VARIANT_3_FPS}" -g:v:3 "${VARIANT_3_GOP}" -keyint_min:v:3 "${VARIANT_3_GOP}" "${SC_THRESHOLD[@]}" -force_key_frames:v:3 "expr:gte(t,n_forced*${HLS_SEGMENT_TIME})" \
   "${AUDIO_MAP[@]}" \
   "${AUDIO_CODEC[@]}" \
   -f hls \
-  -hls_time 1 \
-  -hls_list_size 300 \
+  -hls_time "${HLS_SEGMENT_TIME}" \
+  -hls_list_size "${HLS_PLAYLIST_SIZE}" \
   -hls_flags delete_segments+append_list+independent_segments+program_date_time+temp_file \
   -master_pl_name master.m3u8 \
   -var_stream_map "${VAR_STREAM_MAP}" \
