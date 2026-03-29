@@ -202,6 +202,7 @@ function ensureStoragePaths() {
 ensureStoragePaths();
 
 const encoderProcesses = new Map();
+let encoderRestartScanInFlight = false;
 
 function isSrtSource(source) {
   return typeof source === "string" && source.startsWith("srt://");
@@ -378,6 +379,18 @@ async function startCameraEncoders() {
         buildRecordingEncoderEnv()
       );
     }
+  }
+}
+
+async function ensureCameraEncodersRunning() {
+  if (encoderRestartScanInFlight) {
+    return;
+  }
+  encoderRestartScanInFlight = true;
+  try {
+    await startCameraEncoders();
+  } finally {
+    encoderRestartScanInFlight = false;
   }
 }
 
@@ -966,4 +979,9 @@ function startServer(port, host, attemptsRemaining = 5) {
 
 const { port, host } = config.server;
 startCameraEncoders();
+setInterval(() => {
+  ensureCameraEncodersRunning().catch((error) => {
+    console.warn("[encoders] periodic restart scan failed:", error.message);
+  });
+}, 15 * 1000);
 startServer(port, host);

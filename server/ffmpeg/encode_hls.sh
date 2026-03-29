@@ -15,6 +15,8 @@ SC_THRESHOLD=()
 HLS_SEGMENT_TIME=${HLS_SEGMENT_TIME:-1}
 HLS_PLAYLIST_SIZE=${HLS_PLAYLIST_SIZE:-300}
 RECORD_SEGMENT_TIME=${RECORD_SEGMENT_TIME:-60}
+INPUT_ANALYZEDURATION=${INPUT_ANALYZEDURATION:-2000000}
+INPUT_PROBESIZE=${INPUT_PROBESIZE:-1000000}
 
 supports_nvenc() {
   command -v nvidia-smi >/dev/null 2>&1 || return 1
@@ -198,8 +200,8 @@ ffmpeg \
   -flags low_delay \
   -err_detect ignore_err \
   -max_delay 0 \
-  -analyzeduration 0 \
-  -probesize 32 \
+  -analyzeduration "${INPUT_ANALYZEDURATION}" \
+  -probesize "${INPUT_PROBESIZE}" \
   -strict experimental \
   -i "${SOURCE_URL}" \
   -filter_complex "[0:v]${TIMESTAMP_FILTER},${IMAGE_FILTER}[v0];[v0]split=5[vrec][v1][v2][v3][v4]" \
