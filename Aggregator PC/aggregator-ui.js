@@ -494,7 +494,7 @@ app.post("/stop", (req, res) => {
   res.redirect("/?message=Stopped+capture");
 });
 
-app.listen(port, "0.0.0.0", () => {
+const server = app.listen(port, "0.0.0.0", () => {
   const addresses = getLanAddresses();
   const addressList = addresses.length ? addresses : ["<lan-ip>"];
   console.log("Chickencams Aggregator UI running:");
@@ -502,4 +502,15 @@ app.listen(port, "0.0.0.0", () => {
     console.log(`  http://${address}:${port}`);
   });
   console.log("Use CTRL+C to stop.");
+});
+
+server.on("error", (error) => {
+  if (error?.code === "EADDRINUSE") {
+    console.error(`Aggregator UI is already running on port ${port}.`);
+    console.error(`Open http://localhost:${port}/ in your browser.`);
+    process.exit(1);
+  }
+
+  console.error("Aggregator UI failed to start:", error);
+  process.exit(1);
 });
