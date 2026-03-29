@@ -338,10 +338,18 @@ async function startCameraEncoders() {
     }
     const hlsLabel = `${camera.id}:hls`;
     const recordLabel = `${camera.id}:record`;
+    const listenerHandledByHls = isSrtListener(camera.source);
+    const needsHlsSpawn = !encoderProcesses.has(hlsLabel);
+    const needsRecordSpawn = !listenerHandledByHls && !encoderProcesses.has(recordLabel);
+
+    if (!needsHlsSpawn && !needsRecordSpawn) {
+      continue;
+    }
+
     const match = camera.source.match(/^srt:\/\/([^:/]+):(\d+)/i);
     const ingestHost = match?.[1] ?? config.ingestHost ?? "0.0.0.0";
     const ingestPort = match ? Number.parseInt(match[2], 10) : null;
-    if (Number.isFinite(ingestPort)) {
+    if (needsHlsSpawn && Number.isFinite(ingestPort)) {
       let available = await checkUdpPortAvailable(ingestPort, ingestHost);
       if (!available) {
         const released = await releaseFfmpegPort(ingestPort);
@@ -356,7 +364,7 @@ async function startCameraEncoders() {
         continue;
       }
     }
-    if (!encoderProcesses.has(hlsLabel)) {
+    if (needsHlsSpawn) {
       const recordingsArg = isSrtListener(camera.source) ? recordingsRoot : "";
       spawnEncoder(
         "encode_hls.sh",
@@ -365,13 +373,13 @@ async function startCameraEncoders() {
         buildHlsEncoderEnv()
       );
     }
-    if (isSrtListener(camera.source)) {
+    if (listenerHandledByHls) {
       console.warn(
         `[encoders] ${camera.id} recording handled by the HLS encoder for SRT listener sources.`
       );
       continue;
     }
-    if (!encoderProcesses.has(recordLabel)) {
+    if (needsRecordSpawn) {
       spawnEncoder(
         "record_segments.sh",
         [camera.id, camera.source, recordingsRoot],
