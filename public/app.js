@@ -57,7 +57,22 @@ function buildCameraCard(camera) {
 
 function isStreamRendering(video) {
   return video?.dataset.streamReady === "true"
-    || (video instanceof HTMLVideoElement && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+    || (
+      video instanceof HTMLVideoElement
+      && (
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+        || video.currentTime > 0
+        || video.videoWidth > 0
+      )
+    );
+}
+
+function markStreamReady(video, placeholder) {
+  if (!video) {
+    return;
+  }
+  video.dataset.streamReady = "true";
+  hidePlaceholder(placeholder);
 }
 
 function showPlaceholder(placeholder, message) {
@@ -72,6 +87,19 @@ function showPlaceholder(placeholder, message) {
 
 function hidePlaceholder(placeholder) {
   placeholder?.classList.add("hidden");
+}
+
+function attachPlaybackListeners(video, placeholder) {
+  if (!video || video.dataset.playbackListenersAttached === "true") {
+    return;
+  }
+  const onPlaybackReady = () => {
+    markStreamReady(video, placeholder);
+  };
+  ["loadedmetadata", "loadeddata", "canplay", "playing", "timeupdate"].forEach((eventName) => {
+    video.addEventListener(eventName, onPlaybackReady);
+  });
+  video.dataset.playbackListenersAttached = "true";
 }
 
 function updateCameraStatus(card, video, placeholder, health) {
@@ -146,10 +174,7 @@ function upsertCameraCard(camera) {
 
 function attachLiveStream(video, cameraId, placeholder) {
   const streamUrl = `/streams/${cameraId}/master.m3u8`;
-  const markStreamReady = () => {
-    video.dataset.streamReady = "true";
-    hidePlaceholder(placeholder);
-  };
+  attachPlaybackListeners(video, placeholder);
   let retryTimeout = null;
   const scheduleRetry = () => {
     if (retryTimeout) {
@@ -174,7 +199,7 @@ function attachLiveStream(video, cameraId, placeholder) {
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      markStreamReady();
+      video.play().catch(() => {});
     });
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (!isStreamRendering(video)) {
@@ -197,9 +222,7 @@ function attachLiveStream(video, cameraId, placeholder) {
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = streamUrl;
-    video.addEventListener("loadedmetadata", markStreamReady, { once: true });
-    video.addEventListener("loadeddata", markStreamReady, { once: true });
-    video.addEventListener("playing", markStreamReady, { once: true });
+    video.play().catch(() => {});
     video.addEventListener("error", () => {
       if (!isStreamRendering(video)) {
         showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");

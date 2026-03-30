@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "install:systemd": "bash ./install-systemd-service.sh aggregator",
+    "install:systemd:aggregator": "bash ./install-systemd-service.sh aggregator",
+    "install:systemd:server": "bash ./install-systemd-service.sh chickencams",
     "start": "node server/server.js",
     "dev": "node server/server.js"
   },

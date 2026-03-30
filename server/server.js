@@ -133,6 +133,8 @@ function ensureStoragePaths() {
 ensureStoragePaths();
 
 const encoderProcesses = new Map();
+let encoderRestartScanInFlight = false;
+let encoderRestartTimer = null;
 
 function isSrtSource(source) {
   return typeof source === "string" && source.startsWith("srt://");
@@ -152,6 +154,29 @@ function hasCommand(command) {
   return result.status === 0;
 }
 
+function scheduleEncoderRestartScan(delayMs = 3000) {
+  if (!config.autoStartEncoders) {
+    return;
+  }
+  if (encoderRestartTimer) {
+    return;
+  }
+  encoderRestartTimer = setTimeout(async () => {
+    encoderRestartTimer = null;
+    if (encoderRestartScanInFlight) {
+      return;
+    }
+    encoderRestartScanInFlight = true;
+    try {
+      await startCameraEncoders();
+    } catch (error) {
+      console.warn("[encoders] restart scan failed:", error.message);
+    } finally {
+      encoderRestartScanInFlight = false;
+    }
+  }, delayMs);
+}
+
 function spawnEncoder(scriptName, args, label) {
   const scriptPath = path.join(encoderRoot, scriptName);
   const child = spawn(scriptPath, args, { stdio: "inherit" });
@@ -159,10 +184,12 @@ function spawnEncoder(scriptName, args, label) {
   child.on("close", (code) => {
     encoderProcesses.delete(label);
     console.warn(`[encoders] ${label} stopped with code ${code ?? "unknown"}.`);
+    scheduleEncoderRestartScan();
   });
   child.on("error", (error) => {
     encoderProcesses.delete(label);
     console.warn(`[encoders] ${label} failed to start: ${error.message}`);
+    scheduleEncoderRestartScan();
   });
 }
 

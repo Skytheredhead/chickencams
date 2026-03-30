@@ -1,0 +1,17 @@
+[Unit]
+Description=Chickencams aggregator supervisor
+After=network.target
+
+[Service]
+Type=simple
+User=__CHICKENCAMS_USER__
+Group=__CHICKENCAMS_GROUP__
+WorkingDirectory=__CHICKENCAMS_WORKDIR__
+ExecStart=/bin/bash __CHICKENCAMS_WORKDIR__/launch-aggregator-supervisor.sh
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

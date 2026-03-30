@@ -28,6 +28,7 @@ log "Logging to ${LOG_FILE}"
 
 LISTENER_RETRY_COUNT=${LISTENER_RETRY_COUNT:-12}
 LISTENER_RETRY_DELAY=${LISTENER_RETRY_DELAY:-5}
+LISTENER_PREFLIGHT_MODE=${LISTENER_PREFLIGHT_MODE:-skip}
 FFMPEG_RETRY_DELAY=${FFMPEG_RETRY_DELAY:-5}
 CURRENT_FFMPEG_PID=""
 
@@ -41,6 +42,19 @@ stop_capture() {
 trap stop_capture TERM INT
 
 wait_for_listener() {
+  case "${LISTENER_PREFLIGHT_MODE}" in
+    skip|off|none)
+      log "Skipping listener preflight (LISTENER_PREFLIGHT_MODE=${LISTENER_PREFLIGHT_MODE})."
+      return 0
+      ;;
+    udp-nc|netcat|best-effort)
+      ;;
+    *)
+      log "Unknown LISTENER_PREFLIGHT_MODE=${LISTENER_PREFLIGHT_MODE}; expected skip or udp-nc. Skipping preflight."
+      return 0
+      ;;
+  esac
+
   if ! command -v nc >/dev/null 2>&1; then
     log "nc (netcat) not found; skipping listener preflight."
     return 0
@@ -51,8 +65,7 @@ wait_for_listener() {
   until nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; do
     listener_attempt=$((listener_attempt + 1))
     if (( listener_attempt > LISTENER_RETRY_COUNT )); then
-      log "Listener preflight did not succeed for ${SERVER_HOST}:${SERVER_PORT}."
-      log "Continuing anyway because UDP netcat is not a reliable SRT readiness check."
+      log "Listener preflight did not succeed for ${SERVER_HOST}:${SERVER_PORT}; continuing anyway because UDP netcat is not a reliable SRT readiness check."
       return 0
     fi
     log "Listener not ready yet. Retrying in ${LISTENER_RETRY_DELAY}s... (${listener_attempt}/${LISTENER_RETRY_COUNT})"

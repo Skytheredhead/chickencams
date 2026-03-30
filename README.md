@@ -17,8 +17,22 @@ Or install it as a `systemd` service on Linux:
 
 ```bash
 cd /path/to/chickencams
-chmod +x install-systemd-service.sh
-./install-systemd-service.sh
+npm install
+npm run install:systemd:server
+```
+
+If `sudo systemctl restart chickencams` says `Unit chickencams.service not found`, that means the server service has not been installed on that Linux machine yet. Run:
+
+```bash
+cd /path/to/chickencams
+npm install
+npm run install:systemd:server
+```
+
+You can still use the installer directly if you want:
+
+```bash
+./install-systemd-service.sh chickencams
 ```
 
 Then manage it with:
@@ -29,6 +43,16 @@ sudo systemctl stop chickencams
 sudo systemctl start chickencams
 sudo systemctl status chickencams
 ```
+
+For the aggregator PC, install the aggregator supervisor service instead:
+
+```bash
+cd /path/to/chickencams
+npm install
+npm run install:systemd
+```
+
+That installs `aggregator.service`, which runs the background capture supervisor from `Aggregator PC/supervisor.js`.
 
 2. Open the main UI in a browser:
 
@@ -49,6 +73,13 @@ Then, run this command:
 ```bash
 npm install
 node "Aggregator PC/aggregator-ui.js"
+```
+
+Or run the background supervisor as a service:
+
+```bash
+npm run install:systemd
+sudo systemctl status aggregator --no-pager
 ```
 
 Go on a browser and go to the aggregator pc's ip. Ask chatgpt how to find that.
