@@ -26,26 +26,41 @@ log() {
 
 log "Logging to ${LOG_FILE}"
 
-if ! command -v nc >/dev/null 2>&1; then
-  log "Error: nc (netcat) is required to preflight the server listener check."
-  exit 1
-fi
-
-log "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
 LISTENER_RETRY_COUNT=${LISTENER_RETRY_COUNT:-12}
 LISTENER_RETRY_DELAY=${LISTENER_RETRY_DELAY:-5}
+FFMPEG_RETRY_DELAY=${FFMPEG_RETRY_DELAY:-5}
+CURRENT_FFMPEG_PID=""
 
-listener_attempt=0
-until nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; do
-  listener_attempt=$((listener_attempt + 1))
-  if (( listener_attempt > LISTENER_RETRY_COUNT )); then
-    log "Error: No listener reachable at ${SERVER_HOST}:${SERVER_PORT}."
-    log "Hint: Ensure the server is running and listening on that port before starting capture."
-    exit 1
+stop_capture() {
+  if [[ -n "${CURRENT_FFMPEG_PID}" ]]; then
+    kill "${CURRENT_FFMPEG_PID}" 2>/dev/null || true
   fi
-  log "Listener not ready yet. Retrying in ${LISTENER_RETRY_DELAY}s... (${listener_attempt}/${LISTENER_RETRY_COUNT})"
-  sleep "${LISTENER_RETRY_DELAY}"
-done
+  exit 0
+}
+
+trap stop_capture TERM INT
+
+wait_for_listener() {
+  if ! command -v nc >/dev/null 2>&1; then
+    log "nc (netcat) not found; skipping listener preflight."
+    return 0
+  fi
+
+  log "Checking for SRT listener on ${SERVER_HOST}:${SERVER_PORT}..."
+  local listener_attempt=0
+  until nc -u -z -w 2 "${SERVER_HOST}" "${SERVER_PORT}"; do
+    listener_attempt=$((listener_attempt + 1))
+    if (( listener_attempt > LISTENER_RETRY_COUNT )); then
+      log "Listener preflight did not succeed for ${SERVER_HOST}:${SERVER_PORT}."
+      log "Continuing anyway because UDP netcat is not a reliable SRT readiness check."
+      return 0
+    fi
+    log "Listener not ready yet. Retrying in ${LISTENER_RETRY_DELAY}s... (${listener_attempt}/${LISTENER_RETRY_COUNT})"
+    sleep "${LISTENER_RETRY_DELAY}"
+  done
+}
+
+wait_for_listener
 
 if [[ "${DEVICE}" =~ ^/dev/video[0-9]+$ ]]; then
   log "Error: Use a stable /dev/v4l/by-id or /dev/v4l/by-path symlink instead of ${DEVICE}."
@@ -97,27 +112,46 @@ else
   VIDEO_RATE_ARGS=(-crf "${VIDEO_CRF}" -maxrate "${VIDEO_MAXRATE_KBPS}k" -bufsize "${VIDEO_BUFSIZE_KBPS}k")
 fi
 
-exec ffmpeg \
-  -fflags +genpts+nobuffer \
-  -flags low_delay \
-  -use_wallclock_as_timestamps 1 \
-  -thread_queue_size 64 \
-  -f v4l2 \
-  -framerate "${INPUT_FPS}" \
-  -video_size 1280x720 \
-  -i "${DEVICE}" \
-  "${AUDIO_INPUT_ARGS[@]}" \
-  -c:v libx264 \
-  -preset veryfast \
-  -tune zerolatency \
-  "${VIDEO_RATE_ARGS[@]}" \
-  -fps_mode drop \
-  -max_delay 0 \
-  -flush_packets 1 \
-  -muxpreload 0 \
-  -muxdelay 0 \
-  -pix_fmt yuv420p \
-  "${AUDIO_OUTPUT_ARGS[@]}" \
-  -f mpegts \
-  "${PROGRESS_ARGS[@]}" \
+FFMPEG_ARGS=(
+  -fflags +genpts+nobuffer
+  -flags low_delay
+  -use_wallclock_as_timestamps 1
+  -thread_queue_size 64
+  -f v4l2
+  -framerate "${INPUT_FPS}"
+  -video_size 1280x720
+  -i "${DEVICE}"
+  "${AUDIO_INPUT_ARGS[@]}"
+  -c:v libx264
+  -preset veryfast
+  -tune zerolatency
+  "${VIDEO_RATE_ARGS[@]}"
+  -fps_mode drop
+  -max_delay 0
+  -flush_packets 1
+  -muxpreload 0
+  -muxdelay 0
+  -pix_fmt yuv420p
+  "${AUDIO_OUTPUT_ARGS[@]}"
+  -f mpegts
+  "${PROGRESS_ARGS[@]}"
   "srt://${SERVER_HOST}:${SERVER_PORT}?mode=caller&transtype=live&latency=50"
+)
+
+while true; do
+  ffmpeg "${FFMPEG_ARGS[@]}" &
+  CURRENT_FFMPEG_PID=$!
+  set +e
+  wait "${CURRENT_FFMPEG_PID}"
+  exit_code=$?
+  set -e
+  CURRENT_FFMPEG_PID=""
+
+  if (( exit_code == 0 )); then
+    log "ffmpeg exited cleanly."
+    exit 0
+  fi
+
+  log "ffmpeg exited with code ${exit_code}. Retrying in ${FFMPEG_RETRY_DELAY}s..."
+  sleep "${FFMPEG_RETRY_DELAY}"
+done

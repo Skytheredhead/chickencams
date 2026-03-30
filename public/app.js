@@ -76,8 +76,13 @@ function hidePlaceholder(placeholder) {
 
 function updateCameraStatus(card, video, placeholder, health) {
   const state = health?.status ?? "OFFLINE";
+  const streamRendering = isStreamRendering(video);
   card.dataset.state = state;
-  card.classList.toggle("offline", state === "OFFLINE");
+  card.classList.toggle("offline", state === "OFFLINE" && !streamRendering);
+  if (streamRendering) {
+    hidePlaceholder(placeholder);
+    return;
+  }
   if (state === "OFFLINE") {
     showPlaceholder(placeholder, "No signal");
     return;
