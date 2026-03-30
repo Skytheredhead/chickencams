@@ -6,18 +6,6 @@ const cameraEmptyState = document.getElementById("cameraEmptyState");
 let cameras = [];
 const cameraCards = new Map();
 
-function getStatusLabel(status) {
-  switch (status) {
-    case "ONLINE":
-      return "Online";
-    case "DEGRADED":
-      return "Degraded";
-    case "OFFLINE":
-    default:
-      return "Offline";
-  }
-}
-
 function buildCameraCard(camera) {
   const card = document.createElement("div");
   card.className = "camera-card";
@@ -45,56 +33,25 @@ function buildCameraCard(camera) {
   video.dataset.camera = camera.id;
   video.dataset.streamReady = "false";
 
-  const placeholder = document.createElement("div");
-  placeholder.className = "camera-placeholder";
-  placeholder.textContent = "No signal";
-
-  body.append(video, placeholder);
+  body.append(video);
   card.append(header, body);
 
-  return { card, video, placeholder, meta, title };
+  return { card, video, meta, title };
 }
 
-function isStreamRendering(video) {
-  return video?.dataset.streamReady === "true"
-    || (
-      video instanceof HTMLVideoElement
-      && (
-        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
-        || video.currentTime > 0
-        || video.videoWidth > 0
-      )
-    );
-}
-
-function markStreamReady(video, placeholder) {
+function markStreamReady(video) {
   if (!video) {
     return;
   }
   video.dataset.streamReady = "true";
-  hidePlaceholder(placeholder);
 }
 
-function showPlaceholder(placeholder, message) {
-  if (!placeholder) {
-    return;
-  }
-  if (message) {
-    placeholder.textContent = message;
-  }
-  placeholder.classList.remove("hidden");
-}
-
-function hidePlaceholder(placeholder) {
-  placeholder?.classList.add("hidden");
-}
-
-function attachPlaybackListeners(video, placeholder) {
+function attachPlaybackListeners(video) {
   if (!video || video.dataset.playbackListenersAttached === "true") {
     return;
   }
   const onPlaybackReady = () => {
-    markStreamReady(video, placeholder);
+    markStreamReady(video);
   };
   ["loadedmetadata", "loadeddata", "canplay", "playing", "timeupdate"].forEach((eventName) => {
     video.addEventListener(eventName, onPlaybackReady);
@@ -102,24 +59,9 @@ function attachPlaybackListeners(video, placeholder) {
   video.dataset.playbackListenersAttached = "true";
 }
 
-function updateCameraStatus(card, video, placeholder, health) {
+function updateCameraStatus(card, health) {
   const state = health?.status ?? "OFFLINE";
-  const streamRendering = isStreamRendering(video);
   card.dataset.state = state;
-  card.classList.toggle("offline", state === "OFFLINE" && !streamRendering);
-  if (streamRendering) {
-    hidePlaceholder(placeholder);
-    return;
-  }
-  if (state === "OFFLINE") {
-    showPlaceholder(placeholder, "No signal");
-    return;
-  }
-  if (state === "DEGRADED" && !isStreamRendering(video)) {
-    showPlaceholder(placeholder, "Signal degraded");
-    return;
-  }
-  hidePlaceholder(placeholder);
 }
 
 function updateCameraMeta(meta, health) {
@@ -166,15 +108,15 @@ function upsertCameraCard(camera) {
     entry = buildCameraCard(camera);
     cameraCards.set(camera.id, entry);
     cameraGrid.appendChild(entry.card);
-    attachLiveStream(entry.video, camera.id, entry.placeholder);
+    attachLiveStream(entry.video, camera.id);
   }
   entry.title.textContent = camera.name;
   return entry;
 }
 
-function attachLiveStream(video, cameraId, placeholder) {
+function attachLiveStream(video, cameraId) {
   const streamUrl = `/streams/${cameraId}/master.m3u8`;
-  attachPlaybackListeners(video, placeholder);
+  attachPlaybackListeners(video);
   let retryTimeout = null;
   const scheduleRetry = () => {
     if (retryTimeout) {
@@ -182,7 +124,7 @@ function attachLiveStream(video, cameraId, placeholder) {
     }
     retryTimeout = window.setTimeout(() => {
       retryTimeout = null;
-      attachLiveStream(video, cameraId, placeholder);
+      attachLiveStream(video, cameraId);
     }, 3000);
   };
 
@@ -202,9 +144,6 @@ function attachLiveStream(video, cameraId, placeholder) {
       video.play().catch(() => {});
     });
     hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (!isStreamRendering(video)) {
-        showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
-      }
       if (data?.fatal) {
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           hls.startLoad();
@@ -224,9 +163,6 @@ function attachLiveStream(video, cameraId, placeholder) {
     video.src = streamUrl;
     video.play().catch(() => {});
     video.addEventListener("error", () => {
-      if (!isStreamRendering(video)) {
-        showPlaceholder(placeholder, video.closest(".camera-card")?.dataset.state === "OFFLINE" ? "No signal" : "Connecting");
-      }
       scheduleRetry();
     });
   }
@@ -274,7 +210,7 @@ async function loadCameras() {
   cameras.forEach((camera) => {
     const entry = upsertCameraCard(camera);
     updateCameraMeta(entry.meta, camera.health);
-    updateCameraStatus(entry.card, entry.video, entry.placeholder, camera.health);
+    updateCameraStatus(entry.card, camera.health);
   });
 
   updateEmptyState();

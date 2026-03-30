@@ -285,25 +285,6 @@ body {
   background: #0b0b0e;
 }
 
-.camera-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #71717a;
-  font-size: 14px;
-  background: linear-gradient(180deg, rgba(9, 9, 11, 0.1), rgba(9, 9, 11, 0.72));
-}
-
-.camera-card.offline {
-  border-color: #3f3f46;
-}
-
-.camera-card.offline .camera-card-header {
-  color: #71717a;
-}
-
 .camera-card[data-state="ONLINE"] {
   border-color: rgba(113, 113, 122, 0.45);
 }
