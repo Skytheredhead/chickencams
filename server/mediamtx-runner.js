@@ -29,11 +29,11 @@ export function buildRuntimeConfig(config) {
   template.paths = {};
   for (const camera of config.cameras) {
     if (!camera.enabled) continue;
-    const port = Number.isFinite(camera.srtPort) ? camera.srtPort : null;
-    if (!port) continue;
     template.paths[camera.id] = {
-      source: `srt://0.0.0.0:${port}?streamid=publish:${camera.id}`,
-      sourceOnDemand: false,
+      // Cameras publish to the global SRT listener (srtAddress) using:
+      //   srt://<central>:<srtPort>?streamid=publish:<path>
+      // so paths must accept publishers, not try to "pull" as a source.
+      source: "publisher",
       record: true,
       // MediaMTX requires %path to be present in recordPath.
       // %path expands to the stream path (e.g. cam1), so it naturally namespaces recordings.

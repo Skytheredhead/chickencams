@@ -18,7 +18,8 @@ const defaultRegistry = {
   defaults: {
     serverHost: process.env.CHICKENCAMS_HOST || "",
     serverWsPort: 7979,
-    srtPortBase: 9001,
+    // MediaMTX listens for SRT publishers on a single port (default 8890).
+    srtPortBase: 8890,
     restartLimit: 5,
     restartWindowSeconds: 120,
     freezeTimeoutSeconds: 8,
@@ -112,7 +113,8 @@ function startProcess(camera, defaults, index) {
     return;
   }
   state.devicePresent = true;
-  const srtPort = camera.srtPort ?? (defaults.srtPortBase + (Number.isFinite(index) ? index : 0));
+  void index;
+  const srtPort = camera.srtPort ?? defaults.srtPortBase;
   const args = [camera.id, camera.devicePath, activeCentral.host, String(srtPort)];
   if (camera.audioDevice) args.push(camera.audioDevice);
   const child = spawn(capturePath, args, {
@@ -341,7 +343,7 @@ async function tick() {
       return;
     }
     if (!state.process) {
-      console.log(`[edge] starting ${cam.id} -> ${activeCentral.host} srtPort=${cam.srtPort ?? (defaults.srtPortBase + idx)}`);
+      console.log(`[edge] starting ${cam.id} -> ${activeCentral.host} srtPort=${cam.srtPort ?? defaults.srtPortBase}`);
       startProcess(cam, defaults, idx);
     }
   });

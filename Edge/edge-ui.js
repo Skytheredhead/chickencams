@@ -16,7 +16,8 @@ const defaultRegistry = {
   defaults: {
     serverHost: process.env.CHICKENCAMS_HOST ?? "",
     serverWsPort: 7979,
-    srtPortBase: Number.parseInt(process.env.CHICKENCAMS_SRT_BASE ?? "9001", 10)
+    // MediaMTX listens for SRT publishers on a single port (default 8890).
+    srtPortBase: Number.parseInt(process.env.CHICKENCAMS_SRT_BASE ?? "8890", 10)
   },
   cameras: [
     { id: "cam1", name: "Cam 1", enabled: true, audioDevice: "" },
@@ -98,8 +99,9 @@ const getLanAddresses = () => Object.values(os.networkInterfaces()).flat()
   .filter((e) => e && e.family === "IPv4" && !e.internal).map((e) => e.address);
 
 const getDefaultPort = (cams, cameraId, basePort) => {
-  const idx = cams.findIndex((c) => c.id === cameraId);
-  return idx === -1 ? basePort : basePort + idx;
+  // A single SRT listener port is shared by all cameras; streamid routes to paths.
+  void cams; void cameraId;
+  return basePort;
 };
 
 const renderPage = (message = "") => {
@@ -147,7 +149,7 @@ const renderPage = (message = "") => {
 
       <div class="card">
         <h2>Capture configuration</h2>
-        <p class="empty">Leave the central host blank to auto-discover via mDNS. SRT ports increment from ${basePort}.</p>
+        <p class="empty">Leave the central host blank to auto-discover via mDNS. SRT port is usually <code>${basePort}</code> for all cameras (MediaMTX uses streamid routing).</p>
         <form method="post" action="/save">
           <label for="serverHost">Central host (optional)</label>
           <input name="serverHost" id="serverHost" value="${reg.defaults.serverHost}" placeholder="auto-discover via mDNS" />
@@ -200,7 +202,7 @@ app.post("/save", (req, res) => {
   reg.defaults.serverHost = serverHost;
   reg.cameras.forEach((cam) => {
     cam.devicePath = (req.body[`device_${cam.id}`] || "").trim();
-    cam.srtPort = Number.parseInt(req.body[`srtPort_${cam.id}`], 10) || cam.srtPort;
+    cam.srtPort = Number.parseInt(req.body[`srtPort_${cam.id}`], 10) || reg.defaults.srtPortBase;
     cam.audioDevice = (req.body[`audio_${cam.id}`] || "").trim();
     // If no device is selected (N/A), force disabled regardless of checkbox state.
     cam.enabled = Boolean(cam.devicePath) && req.body[`enabled_${cam.id}`] === "on";
