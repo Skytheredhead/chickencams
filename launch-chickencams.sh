@@ -30,6 +30,15 @@ trap pause_on_exit EXIT
 : > "$LOG_FILE"
 log "Working directory: $ROOT_DIR"
 
+# Desktop launchers / non-login shells often don't load nvm, which can cause the
+# wrong Node version (e.g. v18) to be used and native deps (better-sqlite3) to fail.
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+  # shellcheck disable=SC1090
+  . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+  nvm use 20 >/dev/null 2>&1 || true
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   log "ERROR: node is not on PATH. Install Node.js 20+."
   exit 1
