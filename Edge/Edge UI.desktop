@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Chickencams Edge UI
+Comment=Start the Edge UI and open the device picker
+Exec=sh -c '"$(dirname "%k")"/launch-edge-ui.sh'
+Terminal=false
+Categories=Utility;Video;

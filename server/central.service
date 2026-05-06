@@ -1,5 +1,5 @@
 [Unit]
-Description=Chickencams server
+Description=Chickencams central server
 After=network.target
 
 [Service]
@@ -7,7 +7,7 @@ Type=simple
 User=__CHICKENCAMS_USER__
 Group=__CHICKENCAMS_GROUP__
 WorkingDirectory=__CHICKENCAMS_WORKDIR__
-ExecStart=__CHICKENCAMS_NODE__ server/server.js
+ExecStart=__CHICKENCAMS_NODE__ server/index.js
 Restart=always
 RestartSec=3
 Environment=NODE_ENV=production

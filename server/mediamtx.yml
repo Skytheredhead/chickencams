@@ -1,0 +1,48 @@
+# Chickencams MediaMTX configuration.
+# Ingests SRT from edge supervisors, republishes as WebRTC + LL-HLS,
+# and writes fMP4 recording segments that the central indexer ingests.
+
+logLevel: info
+logDestinations: [stdout]
+
+# API for runtime path management (used by server/api.js to add cameras dynamically).
+api: yes
+apiAddress: 127.0.0.1:9997
+
+# WebRTC (WHEP) — browser pulls live from here.
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+# LAN-only: skip ICE servers; clients on same network reach the host directly.
+webrtcICEServers2: []
+
+# LL-HLS for DVR fallback / ABR / non-WebRTC clients.
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: yes
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
+hlsAllowOrigin: '*'
+
+rtsp: yes
+rtspAddress: :8554
+
+# SRT listener; per-camera ports are mapped via the paths section below.
+srt: yes
+srtAddress: :8890
+
+paths:
+  # Per-camera paths are written by server/mediamtx-config.js based on config.cameras.
+  # Each path looks like:
+  # cam1:
+  #   source: srt://0.0.0.0:9001?streamid=publish:cam1
+  #   sourceOnDemand: no
+  #   record: yes
+  #   recordPath: ./recordings/cam1/%Y-%m-%d_%H-%M-%S_%f
+  #   recordFormat: fmp4
+  #   recordSegmentDuration: 60s
+  #   recordDeleteAfter: 0s
+  all_others:

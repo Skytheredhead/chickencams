@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-SERVICE_NAME=${1:-aggregator}
+SERVICE_NAME=${1:-edge}
 TEMPLATE_PATH="$ROOT_DIR/server/${SERVICE_NAME}.service"
 UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 NODE_BIN=$(command -v node || true)
@@ -10,6 +10,7 @@ SERVICE_USER=${SUDO_USER:-${USER:-}}
 
 if [[ ! -f "$TEMPLATE_PATH" ]]; then
   echo "Missing service template for '$SERVICE_NAME' at $TEMPLATE_PATH" >&2
+  echo "Available: edge, central" >&2
   exit 1
 fi
 
@@ -26,9 +27,7 @@ fi
 SERVICE_GROUP=$(id -gn "$SERVICE_USER")
 TMP_FILE=$(mktemp)
 
-escape_sed_replacement() {
-  printf '%s' "$1" | sed -e 's/[\\/&]/\\&/g'
-}
+escape_sed_replacement() { printf '%s' "$1" | sed -e 's/[\\/&]/\\&/g'; }
 
 sed \
   -e "s|__CHICKENCAMS_WORKDIR__|$(escape_sed_replacement "$ROOT_DIR")|g" \
@@ -37,10 +36,7 @@ sed \
   -e "s|__CHICKENCAMS_GROUP__|$(escape_sed_replacement "$SERVICE_GROUP")|g" \
   "$TEMPLATE_PATH" > "$TMP_FILE"
 
-cleanup() {
-  rm -f "$TMP_FILE"
-}
-trap cleanup EXIT
+trap 'rm -f "$TMP_FILE"' EXIT
 
 sudo install -m 0644 "$TMP_FILE" "$UNIT_PATH"
 sudo systemctl daemon-reload

@@ -1,5 +1,5 @@
 [Unit]
-Description=Chickencams aggregator supervisor
+Description=Chickencams edge supervisor
 After=network.target
 
 [Service]
@@ -7,7 +7,7 @@ Type=simple
 User=__CHICKENCAMS_USER__
 Group=__CHICKENCAMS_GROUP__
 WorkingDirectory=__CHICKENCAMS_WORKDIR__
-ExecStart=/bin/bash __CHICKENCAMS_WORKDIR__/launch-aggregator-supervisor.sh
+ExecStart=/bin/bash __CHICKENCAMS_WORKDIR__/launch-edge-supervisor.sh
 Restart=always
 RestartSec=3
 Environment=NODE_ENV=production

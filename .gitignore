@@ -4,4 +4,14 @@ recordings/
 activity/
 .tmp/
 .env
-Aggregator PC/telemetry.json
+Edge/telemetry.json
+Edge/logs/
+server/index.db
+server/index.db-journal
+server/index.db-wal
+server/index.db-shm
+server/config.json
+server/camera-registry.json
+server/mediamtx.runtime.yml
+web/dist/
+web/node_modules/

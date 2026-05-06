@@ -1,19 +1,26 @@
 {
   "name": "chickencams",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "install:systemd": "bash ./install-systemd-service.sh aggregator",
-    "install:systemd:aggregator": "bash ./install-systemd-service.sh aggregator",
-    "install:systemd:server": "bash ./install-systemd-service.sh chickencams",
-    "start": "node server/server.js",
-    "dev": "node server/server.js"
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "build:web": "cd web && npm install && npm run build",
+    "dev:web": "cd web && npm run dev",
+    "install:systemd:edge": "bash ./install-systemd-service.sh edge",
+    "install:systemd:central": "bash ./install-systemd-service.sh central",
+    "install:systemd": "bash ./install-systemd-service.sh edge"
   },
   "dependencies": {
     "archiver": "^6.0.2",
+    "better-sqlite3": "^11.3.0",
+    "bonjour-service": "^1.2.1",
+    "chokidar": "^3.6.0",
     "express": "^4.19.2",
+    "js-yaml": "^4.1.0",
     "mime-types": "^2.1.35",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "ws": "^8.18.0"
   }
 }

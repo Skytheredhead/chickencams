@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface-0 text-zinc-100 font-sans antialiased;
+}
+
+button { font-family: inherit; }
+
+@layer components {
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs;
+  }
+  .pill-online { @apply border-emerald-700/50 bg-emerald-950/40 text-emerald-300; }
+  .pill-degraded { @apply border-amber-700/50 bg-amber-950/40 text-amber-300; }
+  .pill-offline { @apply border-zinc-700/60 bg-zinc-900/60 text-zinc-400; }
+
+  .card {
+    @apply rounded-xl border border-border bg-surface-2/80 backdrop-blur-sm;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border-strong bg-surface-1 px-3 py-1.5 text-sm font-medium text-zinc-100 transition hover:bg-surface-2 hover:border-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply border-emerald-700/60 bg-emerald-700/20 text-emerald-100 hover:bg-emerald-700/30;
+  }
+  .input {
+    @apply w-full rounded-md border border-border-strong bg-surface-0 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-700/50 focus:border-emerald-700/60;
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wider text-zinc-500 mb-1.5;
+  }
+}
+
+@keyframes motion-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.0); }
+  50% { box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.5); }
+}
+.motion-pulse { animation: motion-pulse 1.5s ease-in-out 2; }

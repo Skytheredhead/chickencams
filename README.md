@@ -1,90 +1,78 @@
 # Chickencams
 
-Chickencams is a beautiful easy to use linux app that allows you to turn a couple of cheap webcams (or stripped laptop webcams) and turn them into a feature-rich home security system. The usb webcams run into a linux aggregate device (I'm using an old Thinkpad-W530) and having that re-encode the raw camera outputs and push them over your home internet to get to your main linux server. Said linux server takes the streams and puts em on 192.168.1.whatever:7979 where a user can stream, download, view activity, and rewind to see if you missed anything. Pretty flipping easy to use too.
+LAN-only home camera system. Cheap USB webcams plug into one or more **edge** machines (e.g. an old ThinkPad). The edge encodes H.264 and pushes SRT streams to a **central** server which republishes them as WebRTC live, LL-HLS DVR, and recorded fMP4 segments.
 
-## How it works (TLDR)
-$4 webcams -> old linux machine -> [LAN] -> linux server (maybe -> cloudflare tunnel if you feel like it)
+```
+USB cams ─▶ Edge (encode + SRT push) ─[LAN]─▶ Central (MediaMTX + index + UI)
+                                                 │
+                                                 ├─ WebRTC (sub-second live)
+                                                 ├─ HLS    (DVR / rewind)
+                                                 └─ fMP4   (recordings)
+```
 
-## Quick start
+## Stack
 
-1. Install dependencies (and ffmpeg) and start the program on the main server:
+- **Central**: Node.js (Express + ws + better-sqlite3 + bonjour-service + chokidar) + MediaMTX (SRT/HLS/WebRTC server) + ffmpeg (export, motion clipping)
+- **Edge**: Node.js supervisor + WebSocket control channel + ffmpeg/libx264 + SRT publisher
+- **Web**: React + Vite + Tailwind, WebRTC live + hls.js for DVR
+- **Discovery**: mDNS (`_chickencams-central._tcp`) — no static IPs needed
+- **Auth**: none, LAN only
 
-figure out how to install ffmpeg. you got this
+## Prerequisites
 
-open the file **launch-chickencams.sh** (run as program)
+- Linux for both edge and central (works on macOS for development)
+- Node.js 20+, ffmpeg, [MediaMTX](https://github.com/bluenviron/mediamtx) (`apt install` or unpack the binary into `vendor/mediamtx/`)
+- Edge needs `v4l2-utils`
 
-Or install it as a `systemd` service on Linux:
+## First run
 
 ```bash
-cd /path/to/chickencams
+git clone <this repo>
+cd chickencams
 npm install
-npm run install:systemd:server
+npm run build:web
+node server/index.js
 ```
 
-If `sudo systemctl restart chickencams` says `Unit chickencams.service not found`, that means the server service has not been installed on that Linux machine yet. Run:
+Open `http://<central-ip>:7979/`. The web UI shows live WebRTC for every connected camera; DVR / Activity / Export / Settings live in the sidebar.
 
-```bash
-cd /path/to/chickencams
-npm install
-npm run install:systemd:server
-```
+## Edge setup
 
-You can still use the installer directly if you want:
+On the edge machine:
 
-```bash
-./install-systemd-service.sh chickencams
-```
-
-Then manage it with:
-
-```bash
-sudo systemctl restart chickencams
-sudo systemctl stop chickencams
-sudo systemctl start chickencams
-sudo systemctl status chickencams
-```
-
-For the aggregator PC, install the aggregator supervisor service instead:
-
-```bash
-cd /path/to/chickencams
-npm install
-npm run install:systemd
-```
-
-That installs `aggregator.service`, which runs the background capture supervisor from `Aggregator PC/supervisor.js`.
-
-2. Open the main UI in a browser:
-
-- User UI: `http://your_pc's_ip:7979/`
-- Config UI: `http://your_pc's_ip:7979/config` (ignore that one setting in there right now, it doesn't do anything)
-
-3. Aggregator PC setup:
-
-Install ffmpeg. Ask chatgpt im too lazy to type this all out right now.
-
-Run this command in
-```
-cd ~/Downloads/chickencams-main
-```
-^ or whatever you had the folder/whatever you named it
-
-Then, run this command:
 ```bash
 npm install
-node "Aggregator PC/aggregator-ui.js"
+node Edge/edge-ui.js   # http://<edge-ip>:3010 — pick devices and SRT ports
+node Edge/supervisor.js
 ```
 
-Or run the background supervisor as a service:
+The supervisor auto-discovers central via mDNS and pushes SRT to the configured ports (default 9001+). Set `CHICKENCAMS_HOST=192.168.1.50` to override discovery.
+
+## systemd
 
 ```bash
-npm run install:systemd
-sudo systemctl status aggregator --no-pager
+# on the central machine
+npm run install:systemd:central
+
+# on each edge machine
+npm run install:systemd:edge
 ```
 
-Go on a browser and go to the aggregator pc's ip. Ask chatgpt how to find that.
-- Aggregator UI: `http://aggregator_pc's_ip:3010`
-Select the video device for each camera. If you see two, its cause linux is goofy, just select the -index0 one. Leave the ports alone on their default settings (9001-9005)
+## Development
 
+```bash
+npm run dev              # central API + WS on :7979
+npm run dev:web          # Vite dev server on :5173 with /api proxy
+```
 
-uh like and subscribe if you need help. This ___might___ be maintained. probably not. who knows. I made this so I can spy on my chickens from all the way across the country.
+## Layout
+
+- `server/` — central server (Express API, WS hub, MediaMTX runner, SQLite index, motion worker, mDNS)
+- `Edge/` — edge supervisor + capture.sh + edge-ui
+- `web/` — React UI (Vite, builds to `web/dist` which Express serves)
+- `recordings/` — fMP4 segments written by MediaMTX (per-camera dirs)
+- `activity/` — motion-triggered clips + thumbnails
+
+## Configuration
+
+Defaults live in `server/config.default.json`. Anything overridden through the Settings UI is persisted to `server/config.json` (cameras go to `server/camera-registry.json`).
