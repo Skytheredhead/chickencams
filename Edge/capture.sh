@@ -11,6 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR=${LOG_DIR:-"${SCRIPT_DIR}/logs"}
 LOG_FILE=${LOG_FILE:-"${LOG_DIR}/${CAMERA_ID}.log"}
 MAX_FPS=${MAX_FPS:-15}
+VIDEO_SIZE=${VIDEO_SIZE:-1280x720}
+INPUT_FORMAT=${INPUT_FORMAT:-auto} # auto|mjpeg|yuyv422|...
 VIDEO_RATE_MODE=${VIDEO_RATE_MODE:-vbr}
 VIDEO_CRF=${VIDEO_CRF:-23}
 VIDEO_BITRATE_KBPS=${VIDEO_BITRATE_KBPS:-3000}
@@ -49,6 +51,29 @@ log "Capture: device=${DEVICE} fps=${INPUT_FPS} target=${SERVER_HOST}:${SERVER_P
 PROGRESS_ARGS=()
 [[ "${FFMPEG_PROGRESS:-}" == "1" ]] && PROGRESS_ARGS=(-progress pipe:1 -nostats)
 
+detect_input_format() {
+  # Prefer MJPEG if the camera supports it; this dramatically reduces USB bandwidth
+  # compared to raw YUYV and can prevent V4L2 "No space left on device" failures.
+  if [[ "${INPUT_FORMAT}" != "auto" ]]; then
+    echo "${INPUT_FORMAT}"
+    return
+  fi
+  if command -v v4l2-ctl >/dev/null 2>&1; then
+    if v4l2-ctl --device "${DEVICE}" --list-formats-ext 2>/dev/null | grep -q "MJPG"; then
+      echo "mjpeg"
+      return
+    fi
+  fi
+  echo ""
+}
+
+INPUT_FORMAT_FLAG=()
+SELECTED_INPUT_FORMAT="$(detect_input_format)"
+if [[ -n "${SELECTED_INPUT_FORMAT}" ]]; then
+  log "Using input_format=${SELECTED_INPUT_FORMAT}"
+  INPUT_FORMAT_FLAG=(-input_format "${SELECTED_INPUT_FORMAT}")
+fi
+
 AUDIO_INPUT_ARGS=()
 AUDIO_OUTPUT_ARGS=()
 if [[ -n "${AUDIO_DEVICE}" ]]; then
@@ -72,8 +97,9 @@ FFMPEG_ARGS=(
   -use_wallclock_as_timestamps 1
   -thread_queue_size 64
   -f v4l2
+  "${INPUT_FORMAT_FLAG[@]}"
   -framerate "${INPUT_FPS}"
-  -video_size 1280x720
+  -video_size "${VIDEO_SIZE}"
   -i "${DEVICE}"
   "${AUDIO_INPUT_ARGS[@]}"
   -c:v libx264
