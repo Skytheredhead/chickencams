@@ -33,10 +33,15 @@ const loadRegistry = () => {
   try {
     if (!fs.existsSync(registryPath)) return defaultRegistry;
     const reg = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
-    return {
+    const merged = {
       defaults: { ...defaultRegistry.defaults, ...(reg.defaults ?? {}) },
       cameras: Array.isArray(reg.cameras) && reg.cameras.length ? reg.cameras : defaultRegistry.cameras
     };
+    // If a camera has no device selected (N/A), it should be treated as disabled.
+    merged.cameras.forEach((cam) => {
+      if (!cam.devicePath) cam.enabled = false;
+    });
+    return merged;
   } catch {
     return defaultRegistry;
   }
@@ -197,7 +202,8 @@ app.post("/save", (req, res) => {
     cam.devicePath = (req.body[`device_${cam.id}`] || "").trim();
     cam.srtPort = Number.parseInt(req.body[`srtPort_${cam.id}`], 10) || cam.srtPort;
     cam.audioDevice = (req.body[`audio_${cam.id}`] || "").trim();
-    cam.enabled = req.body[`enabled_${cam.id}`] === "on";
+    // If no device is selected (N/A), force disabled regardless of checkbox state.
+    cam.enabled = Boolean(cam.devicePath) && req.body[`enabled_${cam.id}`] === "on";
   });
   saveRegistry(reg);
   res.redirect("/?message=Saved.+Supervisor+will+pick+up+changes+on+next+tick.");
