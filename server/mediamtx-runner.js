@@ -35,7 +35,9 @@ export function buildRuntimeConfig(config) {
       source: `srt://0.0.0.0:${port}?streamid=publish:${camera.id}`,
       sourceOnDemand: false,
       record: true,
-      recordPath: path.join(config._paths.recordingsRoot, camera.id, "%Y-%m-%d_%H-%M-%S_%f"),
+      // MediaMTX requires %path to be present in recordPath.
+      // %path expands to the stream path (e.g. cam1), so it naturally namespaces recordings.
+      recordPath: path.join(config._paths.recordingsRoot, "%path", "%Y-%m-%d_%H-%M-%S_%f"),
       recordFormat: "fmp4",
       recordSegmentDuration: `${config.recording.segmentSeconds}s`,
       recordDeleteAfter: "0s"

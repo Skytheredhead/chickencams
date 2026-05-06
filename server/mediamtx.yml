@@ -25,7 +25,7 @@ hlsSegmentCount: 7
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
 hlsSegmentMaxSize: 50M
-hlsAllowOrigin: '*'
+hlsAllowOrigins: ['*']
 
 rtsp: true
 rtspAddress: :8554
@@ -40,8 +40,8 @@ paths:
   # cam1:
   #   source: srt://0.0.0.0:9001?streamid=publish:cam1
   #   sourceOnDemand: no
-  #   record: yes
-  #   recordPath: ./recordings/cam1/%Y-%m-%d_%H-%M-%S_%f
+  #   record: true
+  #   recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S_%f
   #   recordFormat: fmp4
   #   recordSegmentDuration: 60s
   #   recordDeleteAfter: 0s
