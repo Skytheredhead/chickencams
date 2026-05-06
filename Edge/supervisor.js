@@ -34,6 +34,8 @@ let activeCentral = null;
 let ws = null;
 let wsBackoffMs = 1000;
 let telemetryTimer = null;
+let lastCentralLogAt = 0;
+let lastWsErrorAt = 0;
 
 function loadRegistry() {
   try {
@@ -241,6 +243,11 @@ async function ensureCentral() {
   const reg = loadRegistry();
   if (reg.defaults.serverHost) {
     activeCentral = { host: reg.defaults.serverHost, port: reg.defaults.serverWsPort };
+    const now = Date.now();
+    if (now - lastCentralLogAt > 5000) {
+      console.log(`[edge] using configured central ${activeCentral.host}:${activeCentral.port}`);
+      lastCentralLogAt = now;
+    }
     return activeCentral;
   }
   console.log("[edge] discovering central via mDNS...");
@@ -248,6 +255,12 @@ async function ensureCentral() {
   if (found) {
     activeCentral = found;
     console.log(`[edge] discovered central at ${found.host}:${found.port}`);
+  } else {
+    const now = Date.now();
+    if (now - lastCentralLogAt > 5000) {
+      console.warn("[edge] no central discovered yet (mDNS). Set a Central host in the UI or CHICKENCAMS_HOST.");
+      lastCentralLogAt = now;
+    }
   }
   return activeCentral;
 }
@@ -255,9 +268,11 @@ async function ensureCentral() {
 function connectWs() {
   if (!activeCentral) return;
   const url = `ws://${activeCentral.host}:${activeCentral.port}/ws/edge`;
+  console.log(`[edge] connecting websocket ${url}`);
   ws = new WebSocket(url);
   ws.on("open", () => {
     wsBackoffMs = 1000;
+    console.log(`[edge] websocket connected (${url})`);
     ws.send(JSON.stringify(buildHello(loadRegistry())));
     if (telemetryTimer) clearInterval(telemetryTimer);
     telemetryTimer = setInterval(() => {
@@ -270,12 +285,20 @@ function connectWs() {
     try { msg = JSON.parse(raw.toString()); } catch { return; }
     handleCommand(msg);
   });
-  ws.on("close", () => {
+  ws.on("close", (code, reason) => {
     if (telemetryTimer) { clearInterval(telemetryTimer); telemetryTimer = null; }
+    console.warn(`[edge] websocket closed code=${code} reason=${reason?.toString?.() || ""}`.trim());
     setTimeout(connectWs, wsBackoffMs);
     wsBackoffMs = Math.min(wsBackoffMs * 2, 30000);
   });
-  ws.on("error", () => { try { ws.close(); } catch {} });
+  ws.on("error", (err) => {
+    const now = Date.now();
+    if (now - lastWsErrorAt > 2000) {
+      console.warn(`[edge] websocket error: ${err?.message || String(err)}`);
+      lastWsErrorAt = now;
+    }
+    try { ws.close(); } catch {}
+  });
 }
 
 function handleCommand(msg) {
@@ -293,6 +316,7 @@ function handleCommand(msg) {
 
 async function tick() {
   await ensureCentral();
+  writeTelemetryFile();
   if (!activeCentral) return;
   if (!ws || ws.readyState === WebSocket.CLOSED) connectWs();
 
@@ -308,10 +332,18 @@ async function tick() {
     }
     state.devicePresent = Boolean(cam.devicePath && fs.existsSync(cam.devicePath));
     if (!state.devicePresent) {
+      if (cam.devicePath) {
+        console.warn(`[edge] ${cam.id} device missing: ${cam.devicePath}`);
+      } else {
+        console.warn(`[edge] ${cam.id} has no devicePath configured`);
+      }
       stopProcess(state, "missing-device");
       return;
     }
-    if (!state.process) startProcess(cam, defaults, idx);
+    if (!state.process) {
+      console.log(`[edge] starting ${cam.id} -> ${activeCentral.host} srtPort=${cam.srtPort ?? (defaults.srtPortBase + idx)}`);
+      startProcess(cam, defaults, idx);
+    }
   });
 
   for (const state of running.values()) {

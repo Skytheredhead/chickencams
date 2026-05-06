@@ -62,6 +62,38 @@ ensure_edge_deps() {
   return 0
 }
 
+start_edge_ui() {
+  # Default to starting the UI when launched interactively; disable with EDGE_UI_AUTOSTART=0.
+  if [[ "${EDGE_UI_AUTOSTART:-1}" == "0" ]]; then
+    return 0
+  fi
+  # Don't start UI when running headless/systemd.
+  if [[ ! -t 0 ]]; then
+    return 0
+  fi
+
+  local port="${EDGE_UI_PORT:-3010}"
+  local url="http://127.0.0.1:${port}/"
+
+  if command -v curl >/dev/null 2>&1 && curl --silent --fail --max-time 1 "$url" >/dev/null 2>&1; then
+    log "Edge UI already running at $url"
+    return 0
+  fi
+
+  local ui_log="${ROOT_DIR}/edge-ui.log"
+  : > "$ui_log" || true
+  log "Starting Edge UI in background (EDGE_UI_PORT=${port})..."
+
+  (
+    cd "${ROOT_DIR}/Edge" || exit 1
+    EDGE_UI_PORT="$port" node ./edge-ui.js
+  ) >>"$ui_log" 2>&1 &
+
+  disown || true
+  log "Edge UI log: $ui_log"
+  return 0
+}
+
 if [[ ! -d "${ROOT_DIR}/node_modules" ]] || [[ "${ROOT_DIR}/package.json" -nt "${ROOT_DIR}/node_modules" ]]; then
   log "Installing dependencies (npm install)..."
   if ! npm install 2>&1 | tee -a "$LOG_FILE"; then
@@ -73,6 +105,8 @@ fi
 if ! ensure_edge_deps; then
   exit 1
 fi
+
+start_edge_ui || true
 
 log "Starting Edge supervisor (node Edge/supervisor.js)..."
 node Edge/supervisor.js 2>&1 | tee -a "$LOG_FILE"
