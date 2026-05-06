@@ -1,13 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiUrl } from "./base.js";
 
 async function getJson(url) {
-  const r = await fetch(url);
+  const r = await fetch(apiUrl(url));
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
   return r.json();
 }
 
 async function postJson(url, body) {
-  const r = await fetch(url, {
+  const r = await fetch(apiUrl(url), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)

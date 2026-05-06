@@ -6,6 +6,13 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { persistConfig } from "./config.js";
 
+function normalizeBaseUrl(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
 export function createApi({ config, db, hub, refreshConfig }) {
   const app = express();
   app.use(morgan("tiny", {
@@ -18,6 +25,8 @@ export function createApi({ config, db, hub, refreshConfig }) {
   app.get("/api/cameras", (req, res) => {
     const stale = Date.now() - (config.health?.degradedSeconds ?? 15) * 1000;
     const onlineCutoff = Date.now() - (config.health?.onlineSeconds ?? 5) * 1000;
+    const hlsBaseUrl = normalizeBaseUrl(config.ui?.hlsBaseUrl) || `${req.protocol}://${req.hostname}:${config.mediamtx.hlsPort}`;
+    const webrtcBaseUrl = normalizeBaseUrl(config.ui?.webrtcBaseUrl) || `${req.protocol}://${req.hostname}:${config.mediamtx.webrtcPort}`;
     const latestByCamera = db.prepare(`
       SELECT camera_id, MAX(ended_at) AS last_ended_at, SUM(size_bytes) AS total_bytes
       FROM recordings GROUP BY camera_id
@@ -34,8 +43,8 @@ export function createApi({ config, db, hub, refreshConfig }) {
       }
       return {
         ...cam,
-        webrtcUrl: `http://${req.hostname}:${config.mediamtx.webrtcPort}/${cam.id}/whep`,
-        hlsUrl: `http://${req.hostname}:${config.mediamtx.hlsPort}/${cam.id}/index.m3u8`,
+        webrtcUrl: `${webrtcBaseUrl}/${cam.id}/whep`,
+        hlsUrl: `${hlsBaseUrl}/${cam.id}/index.m3u8`,
         health: {
           status,
           lastSegmentMs: lastEnded,

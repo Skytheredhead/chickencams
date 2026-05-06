@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useActivity, useCameras } from "../api/queries.js";
+import { apiUrl } from "../api/base.js";
 
 export default function ActivityView() {
   const { data, isLoading } = useActivity();
@@ -27,7 +28,7 @@ export default function ActivityView() {
             <li key={it.id} className="card overflow-hidden">
               <div className="aspect-video bg-black relative">
                 <img
-                  src={`/api/activity/${it.id}/thumbnail`}
+                  src={apiUrl(`/api/activity/${it.id}/thumbnail`)}
                   alt=""
                   className="w-full h-full object-cover opacity-90"
                   onError={(e) => { e.currentTarget.style.display = "none"; }}

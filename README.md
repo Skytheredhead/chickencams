@@ -76,3 +76,13 @@ npm run dev:web          # Vite dev server on :5173 with /api proxy
 ## Configuration
 
 Defaults live in `server/config.default.json`. Anything overridden through the Settings UI is persisted to `server/config.json` (cameras go to `server/camera-registry.json`).
+
+### Cloudflare Tunnel / reverse proxy
+
+If you're accessing the dashboard through a reverse proxy or Cloudflare Tunnel, you'll typically expose the dashboard on one hostname and MediaMTX HLS/WebRTC on others.
+Set these in `server/config.json` (or via the Settings UI if you surface them):
+
+- `ui.hlsBaseUrl`: e.g. `https://hls.skylarenns.com`
+- `ui.webrtcBaseUrl`: e.g. `https://webrtc.skylarenns.com`
+
+This makes `/api/cameras` return `hlsUrl` / `webrtcUrl` that point at the tunneled hostnames instead of `:<port>` on the dashboard hostname.

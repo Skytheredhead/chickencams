@@ -32,7 +32,9 @@
     "maxActivityDays": 7
   },
   "ui": {
-    "title": "Chickencams"
+    "title": "Chickencams",
+    "hlsBaseUrl": "",
+    "webrtcBaseUrl": ""
   },
   "motion": {
     "enabled": true,

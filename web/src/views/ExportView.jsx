@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCameras } from "../api/queries.js";
+import { apiUrl } from "../api/base.js";
 
 function toLocalInput(ms) {
   const d = new Date(ms);
@@ -48,7 +49,7 @@ export default function ExportView() {
     setError(null);
     setBusy(true);
     try {
-      const r = await fetch("/api/export", {
+      const r = await fetch(apiUrl("/api/export"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,0 +1,10 @@
+{
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://cams.skylarenns.com/api/:path*"
+    }
+  ]
+}
+

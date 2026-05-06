@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useConfig, useSaveConfig } from "../api/queries.js";
 import { useLiveStore } from "../store.js";
+import { apiUrl } from "../api/base.js";
 
 export default function SettingsView() {
   const { data: config, isLoading } = useConfig();
@@ -86,7 +87,7 @@ export default function SettingsView() {
                 </div>
                 <button
                   className="btn"
-                  onClick={() => fetch(`/api/edges/${encodeURIComponent(e.id)}/command`, {
+                  onClick={() => fetch(apiUrl(`/api/edges/${encodeURIComponent(e.id)}/command`), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ type: "restart-supervisor" })

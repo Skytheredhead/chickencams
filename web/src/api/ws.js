@@ -1,4 +1,5 @@
 import { useLiveStore } from "../store.js";
+import { wsUrl } from "./base.js";
 
 export function connectClientWs() {
   let ws = null;
@@ -7,8 +8,7 @@ export function connectClientWs() {
 
   function open() {
     if (stopped) return;
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws/client`);
+    ws = new WebSocket(wsUrl("/ws/client"));
     ws.addEventListener("open", () => { backoff = 1000; });
     ws.addEventListener("message", (ev) => {
       let msg;
