@@ -13,6 +13,7 @@ LOG_FILE=${LOG_FILE:-"${LOG_DIR}/${CAMERA_ID}.log"}
 MAX_FPS=${MAX_FPS:-15}
 VIDEO_SIZE=${VIDEO_SIZE:-1280x720}
 INPUT_FORMAT=${INPUT_FORMAT:-auto} # auto|mjpeg|yuyv422|...
+GOP_SECONDS=${GOP_SECONDS:-2} # keyframe interval target (seconds) for HLS/WebRTC friendliness
 VIDEO_RATE_MODE=${VIDEO_RATE_MODE:-vbr}
 VIDEO_CRF=${VIDEO_CRF:-23}
 VIDEO_BITRATE_KBPS=${VIDEO_BITRATE_KBPS:-3000}
@@ -47,6 +48,10 @@ detect_camera_fps() {
 
 INPUT_FPS=$(detect_camera_fps)
 log "Capture: device=${DEVICE} fps=${INPUT_FPS} target=${SERVER_HOST}:${SERVER_PORT} streamid=publish:${CAMERA_ID}"
+
+GOP_FRAMES=$(( INPUT_FPS * GOP_SECONDS ))
+(( GOP_FRAMES < 10 )) && GOP_FRAMES=10
+log "Encoder: gop=${GOP_FRAMES} frames (~${GOP_SECONDS}s)"
 
 PROGRESS_ARGS=()
 [[ "${FFMPEG_PROGRESS:-}" == "1" ]] && PROGRESS_ARGS=(-progress pipe:1 -nostats)
@@ -105,6 +110,9 @@ FFMPEG_ARGS=(
   -c:v libx264
   -preset veryfast
   -tune zerolatency
+  -g "${GOP_FRAMES}"
+  -keyint_min "${GOP_FRAMES}"
+  -sc_threshold 0
   "${VIDEO_RATE_ARGS[@]}"
   -fps_mode drop
   -max_delay 0
