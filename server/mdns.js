@@ -1,4 +1,4 @@
-import Bonjour from "bonjour-service";
+import { Bonjour } from "bonjour-service";
 
 const SERVICE_TYPE = "chickencams-central";
 

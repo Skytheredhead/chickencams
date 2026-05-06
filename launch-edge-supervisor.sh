@@ -41,12 +41,37 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   log "WARNING: ffmpeg is not on PATH. Camera capture will fail."
 fi
 
+ensure_edge_deps() {
+  # The edge supervisor uses ESM imports; if deps are missing but node_modules exists,
+  # we won't hit the install condition below. Explicitly verify required packages.
+  local missing=0
+  if ! node -e "import('ws').then(()=>process.exit(0)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    log "Missing dependency: ws"
+    missing=1
+  fi
+
+  if (( missing == 0 )); then
+    return 0
+  fi
+
+  log "Installing dependencies (npm install)..."
+  if ! npm install 2>&1 | tee -a "$LOG_FILE"; then
+    log "ERROR: npm install failed."
+    return 1
+  fi
+  return 0
+}
+
 if [[ ! -d "${ROOT_DIR}/node_modules" ]] || [[ "${ROOT_DIR}/package.json" -nt "${ROOT_DIR}/node_modules" ]]; then
   log "Installing dependencies (npm install)..."
   if ! npm install 2>&1 | tee -a "$LOG_FILE"; then
     log "ERROR: npm install failed."
     exit 1
   fi
+fi
+
+if ! ensure_edge_deps; then
+  exit 1
 fi
 
 log "Starting Edge supervisor (node Edge/supervisor.js)..."

@@ -6,20 +6,20 @@ logLevel: info
 logDestinations: [stdout]
 
 # API for runtime path management (used by server/api.js to add cameras dynamically).
-api: yes
+api: true
 apiAddress: 127.0.0.1:9997
 
 # WebRTC (WHEP) — browser pulls live from here.
-webrtc: yes
+webrtc: true
 webrtcAddress: :8889
 webrtcLocalUDPAddress: :8189
 # LAN-only: skip ICE servers; clients on same network reach the host directly.
 webrtcICEServers2: []
 
 # LL-HLS for DVR fallback / ABR / non-WebRTC clients.
-hls: yes
+hls: true
 hlsAddress: :8888
-hlsAlwaysRemux: yes
+hlsAlwaysRemux: true
 hlsVariant: lowLatency
 hlsSegmentCount: 7
 hlsSegmentDuration: 1s
@@ -27,11 +27,11 @@ hlsPartDuration: 200ms
 hlsSegmentMaxSize: 50M
 hlsAllowOrigin: '*'
 
-rtsp: yes
+rtsp: true
 rtspAddress: :8554
 
 # SRT listener; per-camera ports are mapped via the paths section below.
-srt: yes
+srt: true
 srtAddress: :8890
 
 paths:
