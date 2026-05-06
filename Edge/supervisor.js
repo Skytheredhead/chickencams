@@ -325,6 +325,10 @@ async function tick() {
 
   reg.cameras.forEach((cam, idx) => {
     const state = ensureState(cam);
+    // Treat "N/A" (no devicePath) as disabled. The UI also forces this, but keep it safe here.
+    if (!cam.devicePath) {
+      cam.enabled = false;
+    }
     if (!cam.enabled) {
       stopProcess(state, "disabled");
       state.status = "OFFLINE";
@@ -332,11 +336,7 @@ async function tick() {
     }
     state.devicePresent = Boolean(cam.devicePath && fs.existsSync(cam.devicePath));
     if (!state.devicePresent) {
-      if (cam.devicePath) {
-        console.warn(`[edge] ${cam.id} device missing: ${cam.devicePath}`);
-      } else {
-        console.warn(`[edge] ${cam.id} has no devicePath configured`);
-      }
+      // Don't spam logs: missing devices can be transient and are visible in telemetry/UI.
       stopProcess(state, "missing-device");
       return;
     }
