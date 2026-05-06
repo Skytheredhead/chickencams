@@ -1,0 +1,24 @@
+[00:23:48] Working directory: /Users/skylarenns/Desktop/Projects/chickencams
+[00:23:48] node: v25.9.0
+[00:23:48] Installing dependencies (npm install)...
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+
+added 83 packages, and audited 164 packages in 23s
+
+27 packages are looking for funding
+  run `npm fund` for details
+
+5 vulnerabilities (1 low, 1 moderate, 3 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm notice
+npm notice New minor version of npm available! 11.12.1 -> 11.13.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.13.0
+npm notice To update run: npm install -g npm@11.13.0
+npm notice
+[00:24:11] Starting Edge supervisor (node Edge/supervisor.js)...
+[edge] starting supervisor (registry: /Users/skylarenns/Desktop/Projects/chickencams/Edge/registry.json)
