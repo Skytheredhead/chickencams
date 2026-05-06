@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "${ROOT_DIR}/.." && pwd)
@@ -9,6 +9,28 @@ cd "$ROOT_DIR"
 PORT=${EDGE_UI_PORT:-3010}
 UI_URL="http://localhost:${PORT}/"
 
+LOG_FILE="${REPO_ROOT}/edge-ui-launch.log"
+
+log() { printf "[%s] %s\n" "$(date +"%H:%M:%S")" "$*" | tee -a "$LOG_FILE"; }
+
+pause_on_exit() {
+  local code=$?
+  if (( code != 0 )); then
+    echo
+    echo "Edge UI exited with status $code."
+    echo "Log: $LOG_FILE"
+  fi
+  if [[ -t 0 ]]; then
+    echo
+    read -r -p "Press Enter to close this window..." _
+  fi
+  exit "$code"
+}
+trap pause_on_exit EXIT
+
+: > "$LOG_FILE"
+log "Working directory: $ROOT_DIR"
+
 open_ui() {
   if command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$UI_URL" >/dev/null 2>&1 || true
@@ -16,15 +38,28 @@ open_ui() {
 }
 
 run_ui() {
-  if ! node -p "require.resolve('express')" >/dev/null 2>&1; then
-    echo "Missing Node.js dependencies for the Edge UI."
-    echo "Run these commands first:"
-    echo "  cd \"${REPO_ROOT}\""
-    echo "  npm install"
+  if ! command -v node >/dev/null 2>&1; then
+    log "ERROR: node is not on PATH. Install Node.js 20+."
     return 1
   fi
 
-  node "${ROOT_DIR}/edge-ui.js"
+  if ! command -v npm >/dev/null 2>&1; then
+    log "ERROR: npm is not on PATH."
+    return 1
+  fi
+
+  log "node: $(node --version)"
+
+  if [[ ! -d "${REPO_ROOT}/node_modules" ]] || [[ "${REPO_ROOT}/package.json" -nt "${REPO_ROOT}/node_modules" ]]; then
+    log "Installing dependencies (npm install)..."
+    if ! ( cd "$REPO_ROOT" && npm install ) 2>&1 | tee -a "$LOG_FILE"; then
+      log "ERROR: npm install failed."
+      return 1
+    fi
+  fi
+
+  log "Starting Edge UI (node Edge/edge-ui.js)..."
+  node "${ROOT_DIR}/edge-ui.js" 2>&1 | tee -a "$LOG_FILE"
 }
 
 if command -v curl >/dev/null 2>&1 && curl --silent --fail --max-time 1 "$UI_URL" >/dev/null; then
