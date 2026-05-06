@@ -50,6 +50,30 @@ if ! command -v mediamtx >/dev/null 2>&1 && [[ ! -x "${ROOT_DIR}/vendor/mediamtx
   log "         Download from https://github.com/bluenviron/mediamtx/releases or 'brew install mediamtx'."
 fi
 
+port_in_use() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:\\.]${port}$"
+    return $?
+  fi
+  return 1
+}
+
+if port_in_use 7979; then
+  log "ERROR: Port 7979 is already in use."
+  log "Stop the existing process, then rerun."
+  if command -v lsof >/dev/null 2>&1; then
+    log "Tip: lsof -nP -iTCP:7979 -sTCP:LISTEN"
+  elif command -v ss >/dev/null 2>&1; then
+    log "Tip: ss -ltnp | grep ':7979'"
+  fi
+  exit 1
+fi
+
 if [[ ! -d "${ROOT_DIR}/node_modules" ]] || [[ "${ROOT_DIR}/package.json" -nt "${ROOT_DIR}/node_modules" ]]; then
   log "Installing root dependencies (npm install)..."
   if ! npm install 2>&1 | tee -a "$LOG_FILE"; then
