@@ -99,7 +99,9 @@ SRT_URL="srt://${SERVER_HOST}:${SERVER_PORT}?mode=caller&transtype=live&latency=
 FFMPEG_ARGS=(
   -fflags +genpts+nobuffer
   -flags low_delay
-  -use_wallclock_as_timestamps 1
+  # Wallclock timestamps can jitter and cause MediaMTX recorder "drift" warnings.
+  # Let ffmpeg generate monotonic timestamps instead.
+  -avoid_negative_ts make_zero
   -thread_queue_size 64
   -f v4l2
   "${INPUT_FORMAT_FLAG[@]}"
