@@ -14,6 +14,10 @@ pause_on_exit() {
     echo
     echo "Chickencams exited with status $code."
     echo "Log: $LOG_FILE"
+  else
+    echo
+    echo "Chickencams exited successfully."
+    echo "Log: $LOG_FILE"
   fi
   if [[ -t 0 ]]; then
     echo
@@ -62,4 +66,4 @@ if [[ ! -d "${ROOT_DIR}/web/dist" ]]; then
 fi
 
 log "Starting central server (node server/index.js)..."
-exec node server/index.js
+node server/index.js 2>&1 | tee -a "$LOG_FILE"
