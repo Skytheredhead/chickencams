@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://cams.skylarenns.com/api/:path*"
+      "destination": "https://camserver.skylarenns.com/api/:path*"
     }
   ]
 }
