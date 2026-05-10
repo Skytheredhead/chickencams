@@ -16,7 +16,7 @@ function fromLocalInput(str) {
 export default function ExportView() {
   const { data } = useCameras();
   const [params] = useSearchParams();
-  const allCameras = data?.cameras ?? [];
+  const allCameras = (data?.cameras ?? []).filter((c) => c.enabled && c.health?.status !== "OFFLINE");
 
   const initialCam = params.get("camera");
   const initialFrom = Number(params.get("from")) || Date.now() - 60 * 60 * 1000;
@@ -80,7 +80,6 @@ export default function ExportView() {
     <div className="p-6 max-w-3xl">
       <header className="mb-6">
         <h2 className="text-xl font-semibold tracking-tight">Export clips</h2>
-        <p className="text-sm text-zinc-500 mt-0.5">Stitch recorded segments into MP4 for any time range.</p>
       </header>
 
       <form className="card p-6 space-y-5" onSubmit={submit}>

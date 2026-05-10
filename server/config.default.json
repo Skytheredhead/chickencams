@@ -18,6 +18,8 @@
     "apiUrl": "http://127.0.0.1:9997",
     "webrtcPort": 8889,
     "hlsPort": 8888,
+    "playbackPort": 9996,
+    "playbackUrl": "http://127.0.0.1:9996",
     "rtspPort": 8554,
     "srtPort": 8890,
     "autoStart": true

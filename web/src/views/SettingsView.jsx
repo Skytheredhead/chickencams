@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
-import { useConfig, useSaveConfig } from "../api/queries.js";
+import { useConfig, useEdges, useSaveConfig } from "../api/queries.js";
 import { useLiveStore } from "../store.js";
 import { apiUrl } from "../api/base.js";
 
 export default function SettingsView() {
   const { data: config, isLoading } = useConfig();
+  const { data: edgeData } = useEdges();
   const save = useSaveConfig();
-  const edges = useLiveStore((s) => s.edges);
+  const wsEdges = useLiveStore((s) => s.edges);
+  const edges = edgeData?.edges ?? wsEdges;
   const [draft, setDraft] = useState(null);
 
   useEffect(() => {
@@ -40,7 +42,6 @@ export default function SettingsView() {
     <div className="p-6 max-w-3xl space-y-5">
       <header>
         <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
-        <p className="text-sm text-zinc-500 mt-0.5">LAN-only configuration.</p>
       </header>
 
       <section className="card p-5">

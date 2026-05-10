@@ -1,19 +1,22 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Activity, Download, Radio, Settings } from "lucide-react";
+import { Download, Radio, Rewind, Settings } from "lucide-react";
 import { useLiveStore } from "./store.js";
 import { useEffect } from "react";
 import { connectClientWs } from "./api/ws.js";
+import { useEdges } from "./api/queries.js";
 
 const navItems = [
   { to: "/", icon: Radio, label: "Live", end: true },
-  { to: "/activity", icon: Activity, label: "Activity" },
+  { to: "/rewind", icon: Rewind, label: "Rewind" },
   { to: "/export", icon: Download, label: "Export" },
   { to: "/settings", icon: Settings, label: "Settings" }
 ];
 
 export default function App() {
   const title = useLiveStore((s) => s.title);
-  const edges = useLiveStore((s) => s.edges);
+  const wsEdges = useLiveStore((s) => s.edges);
+  const { data: edgeData } = useEdges();
+  const edges = edgeData?.edges ?? wsEdges;
 
   useEffect(() => {
     const close = connectClientWs();
@@ -45,9 +48,7 @@ export default function App() {
           ))}
         </nav>
         <div className="p-3 border-t border-border">
-          {edges.length === 0 ? (
-            <p className="text-xs text-zinc-600">Waiting for edges to connect.</p>
-          ) : (
+          {edges.length > 0 && (
             <ul className="space-y-1">
               {edges.map((e) => (
                 <li key={e.id} className="text-xs text-zinc-500 flex items-center gap-2">

@@ -27,6 +27,9 @@ hlsPartDuration: 200ms
 hlsSegmentMaxSize: 50M
 hlsAllowOrigins: ['*']
 
+playback: true
+playbackAddress: :9996
+
 rtsp: true
 rtspAddress: :8554
 

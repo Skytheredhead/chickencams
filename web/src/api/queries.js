@@ -25,6 +25,14 @@ export function useCameras() {
   });
 }
 
+export function useEdges() {
+  return useQuery({
+    queryKey: ["edges"],
+    queryFn: () => getJson("/api/edges"),
+    refetchInterval: 5000
+  });
+}
+
 export function useConfig() {
   return useQuery({ queryKey: ["config"], queryFn: () => getJson("/api/config") });
 }

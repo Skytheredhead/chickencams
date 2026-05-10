@@ -13,6 +13,31 @@ function normalizeBaseUrl(value) {
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
+async function getLivePaths(config) {
+  const out = new Map();
+  try {
+    const resp = await fetch(`${normalizeBaseUrl(config.mediamtx?.apiUrl)}/v3/paths/list`);
+    if (!resp.ok) return out;
+    const data = await resp.json();
+    for (const item of data.items ?? []) {
+      out.set(item.name, Boolean(item.ready || item.available || item.online));
+    }
+  } catch {}
+  return out;
+}
+
+function getEdgeCameraStatuses(hub) {
+  const out = new Map();
+  for (const edge of hub.listEdges()) {
+    for (const cam of edge.telemetry?.cameras ?? []) {
+      if (!cam?.id) continue;
+      const status = typeof cam.status === "string" ? cam.status : "";
+      if (status) out.set(cam.id, status);
+    }
+  }
+  return out;
+}
+
 export function createApi({ config, db, hub, refreshConfig }) {
   const app = express();
   app.use(morgan("tiny", {
@@ -22,11 +47,11 @@ export function createApi({ config, db, hub, refreshConfig }) {
 
   // ---- Cameras ---------------------------------------------------------------
 
-  app.get("/api/cameras", (req, res) => {
-    const stale = Date.now() - (config.health?.degradedSeconds ?? 15) * 1000;
-    const onlineCutoff = Date.now() - (config.health?.onlineSeconds ?? 5) * 1000;
+  app.get("/api/cameras", async (req, res) => {
     const hlsBaseUrl = normalizeBaseUrl(config.ui?.hlsBaseUrl) || `${req.protocol}://${req.hostname}:${config.mediamtx.hlsPort}`;
     const webrtcBaseUrl = normalizeBaseUrl(config.ui?.webrtcBaseUrl) || `${req.protocol}://${req.hostname}:${config.mediamtx.webrtcPort}`;
+    const livePaths = await getLivePaths(config);
+    const edgeStatuses = getEdgeCameraStatuses(hub);
     const latestByCamera = db.prepare(`
       SELECT camera_id, MAX(ended_at) AS last_ended_at, SUM(size_bytes) AS total_bytes
       FROM recordings GROUP BY camera_id
@@ -36,10 +61,12 @@ export function createApi({ config, db, hub, refreshConfig }) {
     const cameras = config.cameras.map((cam) => {
       const stat = stats.get(cam.id);
       const lastEnded = stat?.last_ended_at ?? null;
+      const edgeStatus = edgeStatuses.get(cam.id);
       let status = "OFFLINE";
-      if (lastEnded != null) {
-        if (lastEnded >= onlineCutoff) status = "ONLINE";
-        else if (lastEnded >= stale) status = "DEGRADED";
+      if (livePaths.get(cam.id) || edgeStatus === "ONLINE") {
+        status = "ONLINE";
+      } else if (["DEGRADED", "DEAD"].includes(edgeStatus)) {
+        status = edgeStatus;
       }
       return {
         ...cam,
@@ -53,6 +80,44 @@ export function createApi({ config, db, hub, refreshConfig }) {
       };
     });
     res.json({ cameras });
+  });
+
+  app.get("/api/playback/:cameraId", async (req, res) => {
+    const cameraId = req.params.cameraId;
+    const startMs = Number(req.query.start);
+    const duration = Math.min(Math.max(Number(req.query.duration) || 300, 1), 3600);
+    if (!Number.isFinite(startMs)) {
+      res.status(400).json({ error: "start (unix ms) required" });
+      return;
+    }
+    if (!config.cameras.some((cam) => cam.id === cameraId)) {
+      res.status(404).json({ error: "camera not found" });
+      return;
+    }
+
+    const fromMs = startMs - (config.recording?.safetyBufferSeconds ?? 5) * 1000;
+    const toMs = startMs + duration * 1000;
+    const segments = db.prepare(`
+      SELECT path FROM recordings WHERE camera_id = ?
+      AND ended_at >= ? AND started_at <= ?
+      ORDER BY started_at ASC
+    `).all(cameraId, fromMs, toMs).map((r) => r.path).filter(fs.existsSync);
+
+    if (segments.length === 0) {
+      res.status(404).json({ error: "recording unavailable" });
+      return;
+    }
+
+    const out = await stitchSegments(config, cameraId, segments, "high");
+    if (!out) {
+      res.status(500).json({ error: "playback stitch failed" });
+      return;
+    }
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(out, () => {
+      try { fs.unlinkSync(out); } catch {}
+    });
   });
 
   // ---- Edges -----------------------------------------------------------------

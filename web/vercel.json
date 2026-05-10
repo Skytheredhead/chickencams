@@ -4,7 +4,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://camserver.skylarenns.com/api/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
     }
   ]
 }
-

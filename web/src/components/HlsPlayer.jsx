@@ -21,6 +21,8 @@ export default function HlsPlayer({ src, className, controls = true, autoPlay = 
 
     return () => {
       try { hls?.destroy(); } catch {}
+      video.removeAttribute("src");
+      video.load();
     };
   }, [src, autoPlay]);
 
