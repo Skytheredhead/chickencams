@@ -34,6 +34,7 @@ const running = new Map();
 let activeCentral = null;
 let ws = null;
 let wsBackoffMs = 1000;
+let wsReconnectTimer = null;
 let telemetryTimer = null;
 let lastCentralLogAt = 0;
 let lastWsErrorAt = 0;
@@ -269,37 +270,48 @@ async function ensureCentral() {
 
 function connectWs() {
   if (!activeCentral) return;
+  if (ws && [WebSocket.CONNECTING, WebSocket.OPEN].includes(ws.readyState)) return;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
   const url = `ws://${activeCentral.host}:${activeCentral.port}/ws/edge`;
   console.log(`[edge] connecting websocket ${url}`);
-  ws = new WebSocket(url);
-  ws.on("open", () => {
+  const socket = new WebSocket(url);
+  ws = socket;
+  socket.on("open", () => {
     wsBackoffMs = 1000;
     console.log(`[edge] websocket connected (${url})`);
-    ws.send(JSON.stringify(buildHello(loadRegistry())));
+    socket.send(JSON.stringify(buildHello(loadRegistry())));
     if (telemetryTimer) clearInterval(telemetryTimer);
     telemetryTimer = setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(buildTelemetry()));
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(buildTelemetry()));
       writeTelemetryFile();
     }, 1000);
   });
-  ws.on("message", (raw) => {
+  socket.on("message", (raw) => {
     let msg;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
     handleCommand(msg);
   });
-  ws.on("close", (code, reason) => {
+  socket.on("close", (code, reason) => {
+    if (ws !== socket) return;
+    ws = null;
     if (telemetryTimer) { clearInterval(telemetryTimer); telemetryTimer = null; }
     console.warn(`[edge] websocket closed code=${code} reason=${reason?.toString?.() || ""}`.trim());
-    setTimeout(connectWs, wsBackoffMs);
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      connectWs();
+    }, wsBackoffMs);
     wsBackoffMs = Math.min(wsBackoffMs * 2, 30000);
   });
-  ws.on("error", (err) => {
+  socket.on("error", (err) => {
     const now = Date.now();
     if (now - lastWsErrorAt > 2000) {
       console.warn(`[edge] websocket error: ${err?.message || String(err)}`);
       lastWsErrorAt = now;
     }
-    try { ws.close(); } catch {}
+    try { socket.close(); } catch {}
   });
 }
 
