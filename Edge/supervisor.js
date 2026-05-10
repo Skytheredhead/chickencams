@@ -118,9 +118,13 @@ function startProcess(camera, defaults, index) {
   const srtPort = camera.srtPort ?? defaults.srtPortBase;
   const args = [camera.id, camera.devicePath, activeCentral.host, String(srtPort)];
   if (camera.audioDevice) args.push(camera.audioDevice);
+  const camEnv = { ...process.env, FFMPEG_PROGRESS: "1" };
+  if (camera.videoSize) camEnv.VIDEO_SIZE = camera.videoSize;
+  if (camera.maxFps) camEnv.MAX_FPS = String(camera.maxFps);
+  if (camera.inputFormat) camEnv.INPUT_FORMAT = camera.inputFormat;
   const child = spawn(capturePath, args, {
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, FFMPEG_PROGRESS: "1" }
+    env: camEnv
   });
   state.process = child;
   state.suppressRestart = false;
@@ -207,7 +211,10 @@ function buildHello(reg) {
     hostname: os.hostname(),
     addresses: addrs,
     ip: addrs[0] || "",
-    cameras: reg.cameras.map((c) => ({ id: c.id, name: c.name, enabled: !!c.enabled }))
+    cameras: reg.cameras.map((c) => ({
+      id: c.id, name: c.name, enabled: !!c.enabled,
+      videoSize: c.videoSize, maxFps: c.maxFps, inputFormat: c.inputFormat
+    }))
   };
 }
 
@@ -217,16 +224,23 @@ function buildTelemetry() {
     payload: {
       updatedAt: Date.now(),
       cpuLoad: os.loadavg()[0],
-      cameras: Array.from(running.values()).map((s) => ({
-        id: s.cameraId,
-        name: s.name,
-        status: s.dead ? "DEAD" : s.status,
-        lastFrameMs: s.lastFrameMs,
-        fps: s.fps,
-        restartCount: s.restartCount,
-        cpuPercent: s.cpuPercent,
-        memoryMb: s.memoryMb
-      }))
+      cameras: Array.from(running.values()).map((s) => {
+        const reg = loadRegistry();
+        const cam = reg.cameras.find((c) => c.id === s.cameraId);
+        return {
+          id: s.cameraId,
+          name: s.name,
+          status: s.dead ? "DEAD" : s.status,
+          lastFrameMs: s.lastFrameMs,
+          fps: s.fps,
+          restartCount: s.restartCount,
+          cpuPercent: s.cpuPercent,
+          memoryMb: s.memoryMb,
+          videoSize: cam?.videoSize,
+          maxFps: cam?.maxFps,
+          inputFormat: cam?.inputFormat
+        };
+      })
     }
   };
 }
@@ -323,6 +337,19 @@ function handleCommand(msg) {
   } else if (msg.type === "start-camera") {
     const cam = reg.cameras.find((c) => c.id === msg.cameraId);
     if (cam) { cam.enabled = true; saveRegistry(reg); }
+  } else if (msg.type === "update-camera-settings") {
+    const cam = reg.cameras.find((c) => c.id === msg.cameraId);
+    if (cam) {
+      if (msg.videoSize !== undefined) cam.videoSize = msg.videoSize || undefined;
+      if (msg.maxFps !== undefined) cam.maxFps = msg.maxFps || undefined;
+      if (msg.inputFormat !== undefined) cam.inputFormat = (msg.inputFormat && msg.inputFormat !== "auto") ? msg.inputFormat : undefined;
+      saveRegistry(reg);
+      const state = running.get(msg.cameraId);
+      if (state) {
+        stopProcess(state, "settings-change");
+        state.suppressRestart = false;
+      }
+    }
   } else if (msg.type === "restart-supervisor") {
     process.exit(0);
   }

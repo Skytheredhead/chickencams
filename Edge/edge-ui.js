@@ -122,7 +122,7 @@ const renderPage = (message = "") => {
     <style>
       :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #09090b; color: #f4f4f5; }
       body { margin: 0; padding: 24px; }
-      .container { max-width: 880px; margin: 0 auto; }
+      .container { max-width: 1100px; margin: 0 auto; }
       h1 { font-size: 24px; margin: 0 0 16px; letter-spacing: -0.01em; }
       h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: #a1a1aa; margin: 0 0 12px; }
       .card { background: rgba(24, 24, 27, 0.8); border: 1px solid #27272a; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
@@ -153,8 +153,9 @@ const renderPage = (message = "") => {
         <form method="post" action="/save">
           <label for="serverHost">Central host (optional)</label>
           <input name="serverHost" id="serverHost" value="${reg.defaults.serverHost}" placeholder="auto-discover via mDNS" />
+          <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Camera</th><th>Video device</th><th>SRT port</th><th>Audio</th><th>Enabled</th></tr></thead>
+            <thead><tr><th>Camera</th><th>Video device</th><th>Resolution</th><th>FPS</th><th>Format</th><th>SRT port</th><th>Audio</th><th>Enabled</th></tr></thead>
             <tbody>
               ${cams.map((cam) => `
                 <tr>
@@ -163,6 +164,23 @@ const renderPage = (message = "") => {
                     <select name="device_${cam.id}">
                       <option value="">N/A</option>
                       ${devices.map((d) => `<option value="${d}" ${d === cam.devicePath ? "selected" : ""}>${d}</option>`).join("")}
+                    </select>
+                  </td>
+                  <td>
+                    <select name="videoSize_${cam.id}">
+                      <option value="" ${!cam.videoSize ? "selected" : ""}>Default</option>
+                      <option value="640x360" ${cam.videoSize === "640x360" ? "selected" : ""}>640x360</option>
+                      <option value="640x480" ${cam.videoSize === "640x480" ? "selected" : ""}>640x480</option>
+                      <option value="1280x720" ${cam.videoSize === "1280x720" ? "selected" : ""}>1280x720</option>
+                      <option value="1920x1080" ${cam.videoSize === "1920x1080" ? "selected" : ""}>1920x1080</option>
+                    </select>
+                  </td>
+                  <td><input type="number" name="maxFps_${cam.id}" value="${cam.maxFps ?? ""}" min="1" max="60" placeholder="10" style="width:60px" /></td>
+                  <td>
+                    <select name="inputFormat_${cam.id}">
+                      <option value="auto" ${(cam.inputFormat ?? "auto") === "auto" ? "selected" : ""}>Auto</option>
+                      <option value="mjpeg" ${cam.inputFormat === "mjpeg" ? "selected" : ""}>MJPEG</option>
+                      <option value="yuyv422" ${cam.inputFormat === "yuyv422" ? "selected" : ""}>YUYV</option>
                     </select>
                   </td>
                   <td><input name="srtPort_${cam.id}" value="${cam.srtPort ?? getDefaultPort(cams, cam.id, basePort)}" /></td>
@@ -177,6 +195,7 @@ const renderPage = (message = "") => {
               `).join("")}
             </tbody>
           </table>
+          </div>
           <button type="submit">Save configuration</button>
         </form>
         ${message ? `<div class="message">${message}</div>` : ""}
@@ -204,6 +223,12 @@ app.post("/save", (req, res) => {
     cam.devicePath = (req.body[`device_${cam.id}`] || "").trim();
     cam.srtPort = Number.parseInt(req.body[`srtPort_${cam.id}`], 10) || reg.defaults.srtPortBase;
     cam.audioDevice = (req.body[`audio_${cam.id}`] || "").trim();
+    const videoSize = (req.body[`videoSize_${cam.id}`] || "").trim();
+    cam.videoSize = videoSize || undefined;
+    const maxFpsRaw = req.body[`maxFps_${cam.id}`];
+    cam.maxFps = maxFpsRaw ? Number.parseInt(maxFpsRaw, 10) || undefined : undefined;
+    const inputFmt = (req.body[`inputFormat_${cam.id}`] || "").trim();
+    cam.inputFormat = (inputFmt && inputFmt !== "auto") ? inputFmt : undefined;
     // If no device is selected (N/A), force disabled regardless of checkbox state.
     cam.enabled = Boolean(cam.devicePath) && req.body[`enabled_${cam.id}`] === "on";
   });
