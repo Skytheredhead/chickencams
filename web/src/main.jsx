@@ -7,6 +7,7 @@ import LiveView from "./views/LiveView.jsx";
 import RewindView from "./views/RewindView.jsx";
 import ExportView from "./views/ExportView.jsx";
 import SettingsView from "./views/SettingsView.jsx";
+import PrinterView from "./views/PrinterView.jsx";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -25,6 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route path="dvr/:cameraId" element={<RewindView />} />
             <Route path="activity" element={<Navigate to="/rewind" replace />} />
             <Route path="export" element={<ExportView />} />
+            <Route path="printer" element={<PrinterView />} />
             <Route path="settings" element={<SettingsView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

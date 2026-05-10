@@ -1,6 +1,6 @@
 import { WebSocketServer } from "ws";
 
-export function createWsHub({ httpServer, onEdgeMessage }) {
+export function createWsHub({ httpServer, onEdgeMessage, config }) {
   const edges = new Map();   // id -> { ws, hostname, ip, addresses, lastSeenMs, telemetry }
   const clients = new Set(); // browser ws set
 
@@ -12,10 +12,35 @@ export function createWsHub({ httpServer, onEdgeMessage }) {
       wss.handleUpgrade(req, socket, head, (ws) => handleEdge(ws));
     } else if (url.pathname === "/ws/client") {
       wss.handleUpgrade(req, socket, head, (ws) => handleClient(ws));
+    } else if (url.pathname === "/ws/moonraker" && config?.printer?.enabled) {
+      wss.handleUpgrade(req, socket, head, (ws) => handleMoonrakerProxy(ws));
     } else {
       socket.destroy();
     }
   });
+
+  function handleMoonrakerProxy(clientWs) {
+    const moonUrl = config.printer.moonrakerUrl.replace(/^http/, "ws");
+    let upstream;
+    try {
+      upstream = new WebSocket(`${moonUrl}/websocket`);
+    } catch {
+      clientWs.close(1011, "upstream connect failed");
+      return;
+    }
+    upstream.on("open", () => {
+      clientWs.on("message", (data) => {
+        if (upstream.readyState === upstream.OPEN) upstream.send(data);
+      });
+    });
+    upstream.on("message", (data) => {
+      if (clientWs.readyState === clientWs.OPEN) clientWs.send(data);
+    });
+    upstream.on("close", () => clientWs.close());
+    upstream.on("error", () => { try { clientWs.close(); } catch {} });
+    clientWs.on("close", () => { try { upstream.close(); } catch {} });
+    clientWs.on("error", () => { try { upstream.close(); } catch {} });
+  }
 
   function send(ws, type, data = {}) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type, ...data }));

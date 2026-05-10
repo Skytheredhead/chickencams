@@ -21,6 +21,8 @@ export function connectClientWs() {
         store.upsertEdge({ id: msg.edgeId, telemetry: msg.payload });
       } else if (msg.type === "edge-event" && msg.event?.kind === "motion") {
         store.flagMotion(msg.event.cameraId);
+      } else if (msg.type === "printer-status") {
+        store.setPrinter(msg);
       }
     });
     ws.addEventListener("close", () => {

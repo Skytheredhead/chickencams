@@ -3,8 +3,10 @@ import { create } from "zustand";
 export const useLiveStore = create((set) => ({
   title: "Chickencams",
   edges: [],
-  recentMotion: {}, // cameraId -> timestamp
+  recentMotion: {},
+  printer: null,
   setTitle: (title) => set({ title }),
+  setPrinter: (printer) => set({ printer }),
   setEdges: (edges) => set({ edges }),
   upsertEdge: (edge) => set((s) => {
     const idx = s.edges.findIndex((e) => e.id === edge.id);

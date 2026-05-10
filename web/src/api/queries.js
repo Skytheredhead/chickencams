@@ -53,6 +53,36 @@ export function useActivity() {
   });
 }
 
+export function usePrinterStatus() {
+  return useQuery({
+    queryKey: ["printer-status"],
+    queryFn: () => getJson("/api/printer/status"),
+    refetchInterval: 3000,
+    retry: false
+  });
+}
+
+export function usePrinterInfo() {
+  return useQuery({
+    queryKey: ["printer-info"],
+    queryFn: () => getJson("/api/printer/info"),
+    refetchInterval: 10000,
+    retry: false
+  });
+}
+
+export function usePrinterGcode() {
+  return useMutation({
+    mutationFn: (script) => postJson("/api/printer/gcode", { script })
+  });
+}
+
+export function usePrinterEmergencyStop() {
+  return useMutation({
+    mutationFn: () => postJson("/api/printer/emergency-stop", {})
+  });
+}
+
 export function useRecordings(cameraId, from, to) {
   return useQuery({
     queryKey: ["recordings", cameraId, from, to],

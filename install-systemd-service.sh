@@ -10,9 +10,15 @@ SERVICE_USER=${SUDO_USER:-${USER:-}}
 
 if [[ ! -f "$TEMPLATE_PATH" ]]; then
   echo "Missing service template for '$SERVICE_NAME' at $TEMPLATE_PATH" >&2
-  echo "Available: edge, central" >&2
+  echo "Available: edge, central, klipper, moonraker" >&2
   exit 1
 fi
+
+KLIPPER_ENV="${KLIPPER_ENV:-$HOME/klippy-env}"
+KLIPPER_DIR="${KLIPPER_DIR:-$HOME/klipper}"
+MOONRAKER_ENV="${MOONRAKER_ENV:-$HOME/moonraker-env}"
+MOONRAKER_DIR="${MOONRAKER_DIR:-$HOME/moonraker}"
+PRINTER_DATA="${PRINTER_DATA:-$HOME/printer_data}"
 
 if [[ -z "$NODE_BIN" ]]; then
   echo "Couldn't find node in PATH. Install Node.js first." >&2
@@ -34,6 +40,11 @@ sed \
   -e "s|__CHICKENCAMS_NODE__|$(escape_sed_replacement "$NODE_BIN")|g" \
   -e "s|__CHICKENCAMS_USER__|$(escape_sed_replacement "$SERVICE_USER")|g" \
   -e "s|__CHICKENCAMS_GROUP__|$(escape_sed_replacement "$SERVICE_GROUP")|g" \
+  -e "s|__KLIPPER_ENV__|$(escape_sed_replacement "$KLIPPER_ENV")|g" \
+  -e "s|__KLIPPER_DIR__|$(escape_sed_replacement "$KLIPPER_DIR")|g" \
+  -e "s|__MOONRAKER_ENV__|$(escape_sed_replacement "$MOONRAKER_ENV")|g" \
+  -e "s|__MOONRAKER_DIR__|$(escape_sed_replacement "$MOONRAKER_DIR")|g" \
+  -e "s|__PRINTER_DATA__|$(escape_sed_replacement "$PRINTER_DATA")|g" \
   "$TEMPLATE_PATH" > "$TMP_FILE"
 
 trap 'rm -f "$TMP_FILE"' EXIT

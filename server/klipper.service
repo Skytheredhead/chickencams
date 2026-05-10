@@ -1,0 +1,15 @@
+[Unit]
+Description=Klipper 3D printer firmware
+After=network.target
+
+[Service]
+Type=simple
+User=__CHICKENCAMS_USER__
+Group=__CHICKENCAMS_GROUP__
+ExecStart=__KLIPPER_ENV__/bin/python __KLIPPER_DIR__/klippy/klippy.py __PRINTER_DATA__/config/printer.cfg -l __PRINTER_DATA__/logs/klippy.log -I __PRINTER_DATA__/comms/klippy.serial -a __PRINTER_DATA__/comms/klippy.sock
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

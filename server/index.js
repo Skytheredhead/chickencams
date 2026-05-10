@@ -11,6 +11,7 @@ import { advertiseCentral } from "./mdns.js";
 import { startMediaMTX } from "./mediamtx-runner.js";
 import { createApi } from "./api.js";
 import { startMotionWorker } from "./motion-worker.js";
+import { startPrinterMonitor } from "./printer-monitor.js";
 
 let config = loadConfig();
 ensureStorageDirs(config);
@@ -18,6 +19,7 @@ ensureStorageDirs(config);
 const db = openDb(config);
 let mediamtxChild = null;
 let motionStop = null;
+let printerMonitorStop = null;
 
 function refreshConfig() {
   config = loadConfig();
@@ -39,7 +41,7 @@ const app = express();
 const webDist = path.join(config._paths.rootDir, "web", "dist");
 
 const httpServer = http.createServer(app);
-const hub = createWsHub({ httpServer, onEdgeMessage: () => {} });
+const hub = createWsHub({ httpServer, onEdgeMessage: () => {}, config });
 const api = createApi({ config, db, hub, refreshConfig });
 app.use(api);
 
@@ -60,6 +62,7 @@ if (fs.existsSync(webDist)) {
 
 mediamtxChild = startMediaMTX(config, { onExit: () => { mediamtxChild = null; } });
 motionStop = startMotionWorker({ db, config });
+printerMonitorStop = startPrinterMonitor({ config, hub });
 
 const stopMdns = advertiseCentral({ port: config.server.port });
 
@@ -72,6 +75,7 @@ function shutdown() {
   try { watcher.close(); } catch {}
   try { stopMdns(); } catch {}
   try { motionStop?.(); } catch {}
+  try { printerMonitorStop?.(); } catch {}
   try { mediamtxChild?.kill("SIGTERM"); } catch {}
   try { httpServer.close(); } catch {}
   process.exit(0);

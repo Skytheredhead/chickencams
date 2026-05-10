@@ -49,6 +49,11 @@
     "segmentSeconds": 60,
     "safetyBufferSeconds": 5
   },
+  "printer": {
+    "enabled": false,
+    "name": "Ender 3 Max Neo",
+    "moonrakerUrl": "http://192.168.1.241:7125"
+  },
   "cameras": [
     { "id": "cam1", "name": "Cam 1", "enabled": true, "srtPort": 9001 },
     { "id": "cam2", "name": "Cam 2", "enabled": true, "srtPort": 9002 },

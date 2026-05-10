@@ -248,6 +248,77 @@ export function createApi({ config, db, hub, refreshConfig }) {
     res.sendFile(row.thumbnail_path);
   });
 
+  // ---- Printer (Moonraker proxy) ---------------------------------------------
+
+  app.get("/api/printer/status", async (req, res) => {
+    if (!config.printer?.enabled) return res.status(503).json({ error: "printer not enabled" });
+    try {
+      const resp = await fetch(`${config.printer.moonrakerUrl}/printer/objects/query?extruder&heater_bed&print_stats&display_status&virtual_sdcard&toolhead`);
+      if (!resp.ok) return res.status(resp.status).json({ error: "moonraker error" });
+      res.json(await resp.json());
+    } catch {
+      res.status(502).json({ error: "moonraker unreachable" });
+    }
+  });
+
+  app.get("/api/printer/info", async (req, res) => {
+    if (!config.printer?.enabled) return res.status(503).json({ error: "printer not enabled" });
+    try {
+      const resp = await fetch(`${config.printer.moonrakerUrl}/printer/info`);
+      if (!resp.ok) return res.status(resp.status).json({ error: "moonraker error" });
+      res.json(await resp.json());
+    } catch {
+      res.status(502).json({ error: "moonraker unreachable" });
+    }
+  });
+
+  app.post("/api/printer/gcode", async (req, res) => {
+    if (!config.printer?.enabled) return res.status(503).json({ error: "printer not enabled" });
+    const { script } = req.body ?? {};
+    if (typeof script !== "string") return res.status(400).json({ error: "script required" });
+    try {
+      const resp = await fetch(`${config.printer.moonrakerUrl}/printer/gcode/script?script=${encodeURIComponent(script)}`, { method: "POST" });
+      if (!resp.ok) return res.status(resp.status).json({ error: "gcode rejected" });
+      res.json({ status: "ok" });
+    } catch {
+      res.status(502).json({ error: "moonraker unreachable" });
+    }
+  });
+
+  app.post("/api/printer/emergency-stop", async (req, res) => {
+    if (!config.printer?.enabled) return res.status(503).json({ error: "printer not enabled" });
+    try {
+      await fetch(`${config.printer.moonrakerUrl}/printer/emergency_stop`, { method: "POST" });
+      res.json({ status: "ok" });
+    } catch {
+      res.status(502).json({ error: "moonraker unreachable" });
+    }
+  });
+
+  app.all("/api/printer/moonraker/*", async (req, res) => {
+    if (!config.printer?.enabled) return res.status(503).json({ error: "printer not enabled" });
+    const moonPath = req.path.replace("/api/printer/moonraker", "");
+    const url = new URL(moonPath, config.printer.moonrakerUrl);
+    for (const [k, v] of Object.entries(req.query)) url.searchParams.set(k, v);
+    try {
+      const opts = { method: req.method, headers: {} };
+      if (req.body && req.method !== "GET" && req.method !== "HEAD") {
+        opts.headers["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(req.body);
+      }
+      const resp = await fetch(url.toString(), opts);
+      const ct = resp.headers.get("content-type") || "";
+      res.status(resp.status);
+      if (ct.includes("json")) {
+        res.json(await resp.json());
+      } else {
+        res.type(ct).send(await resp.text());
+      }
+    } catch {
+      res.status(502).json({ error: "moonraker unreachable" });
+    }
+  });
+
   // ---- Clip export -----------------------------------------------------------
 
   app.post("/api/export", async (req, res) => {

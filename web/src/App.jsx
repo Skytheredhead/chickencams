@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Download, Radio, Rewind, Settings } from "lucide-react";
+import { Download, Printer, Radio, Rewind, Settings } from "lucide-react";
 import { useLiveStore } from "./store.js";
 import { useEffect } from "react";
 import { connectClientWs } from "./api/ws.js";
@@ -9,12 +9,14 @@ const navItems = [
   { to: "/", icon: Radio, label: "Live", end: true },
   { to: "/rewind", icon: Rewind, label: "Rewind" },
   { to: "/export", icon: Download, label: "Export" },
+  { to: "/printer", icon: Printer, label: "Printer" },
   { to: "/settings", icon: Settings, label: "Settings" }
 ];
 
 export default function App() {
   const title = useLiveStore((s) => s.title);
   const wsEdges = useLiveStore((s) => s.edges);
+  const printer = useLiveStore((s) => s.printer);
   const { data: edgeData } = useEdges();
   const edges = edgeData?.edges ?? wsEdges;
 
@@ -47,7 +49,7 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border space-y-2">
           {edges.length > 0 && (
             <ul className="space-y-1">
               {edges.map((e) => (
@@ -57,6 +59,16 @@ export default function App() {
                 </li>
               ))}
             </ul>
+          )}
+          {printer && (
+            <NavLink to="/printer" className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition">
+              <Printer size={12} />
+              <span className="truncate">
+                {printer.state || "offline"}
+                {printer.hotend != null && ` · ${printer.hotend.toFixed(0)}°`}
+                {printer.state === "printing" && printer.progress != null && ` · ${(printer.progress * 100).toFixed(0)}%`}
+              </span>
+            </NavLink>
           )}
         </div>
       </aside>

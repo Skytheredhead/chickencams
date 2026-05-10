@@ -1,0 +1,15 @@
+[Unit]
+Description=Moonraker API server for Klipper
+After=network.target klipper.service
+
+[Service]
+Type=simple
+User=__CHICKENCAMS_USER__
+Group=__CHICKENCAMS_GROUP__
+ExecStart=__MOONRAKER_ENV__/bin/python __MOONRAKER_DIR__/moonraker/moonraker.py -d __PRINTER_DATA__
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
