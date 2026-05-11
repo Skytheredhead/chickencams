@@ -57,15 +57,15 @@ PROGRESS_ARGS=()
 [[ "${FFMPEG_PROGRESS:-}" == "1" ]] && PROGRESS_ARGS=(-progress pipe:1 -nostats)
 
 detect_input_format() {
+  _DETECTED_FORMAT=""
   if [[ "${INPUT_FORMAT}" != "auto" ]]; then
     log "Using explicit input_format=${INPUT_FORMAT}"
-    echo "${INPUT_FORMAT}"
+    _DETECTED_FORMAT="${INPUT_FORMAT}"
     return
   fi
 
   if ! command -v v4l2-ctl >/dev/null 2>&1; then
     log "v4l2-ctl not found; skipping format detection"
-    echo ""
     return
   fi
 
@@ -73,30 +73,28 @@ detect_input_format() {
   formats_output=$(v4l2-ctl --device "${DEVICE}" --list-formats-ext 2>/dev/null || true)
 
   if [[ -n "${formats_output}" ]]; then
-    log "Supported formats for ${DEVICE}:" >&2
+    log "Supported formats for ${DEVICE}:"
     while IFS= read -r line; do
-      [[ -n "${line}" ]] && log "  ${line}" >&2
+      [[ -n "${line}" ]] && log "  ${line}"
     done <<< "${formats_output}"
   else
-    log "Could not enumerate formats for ${DEVICE}" >&2
-    echo ""
+    log "Could not enumerate formats for ${DEVICE}"
     return
   fi
 
   if echo "${formats_output}" | grep -qiE "MJPG|Motion-JPEG"; then
-    echo "mjpeg"
+    _DETECTED_FORMAT="mjpeg"
     return
   fi
   if echo "${formats_output}" | grep -qi "YUYV"; then
-    echo "yuyv422"
+    _DETECTED_FORMAT="yuyv422"
     return
   fi
-
-  echo ""
 }
 
+detect_input_format
+SELECTED_INPUT_FORMAT="${_DETECTED_FORMAT}"
 INPUT_FORMAT_FLAG=()
-SELECTED_INPUT_FORMAT="$(detect_input_format)"
 if [[ -n "${SELECTED_INPUT_FORMAT}" ]]; then
   INPUT_FORMAT_FLAG=(-input_format "${SELECTED_INPUT_FORMAT}")
 fi
