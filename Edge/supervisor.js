@@ -256,17 +256,27 @@ function writeTelemetryFile() {
 }
 
 async function ensureCentral() {
-  if (activeCentral) return activeCentral;
   const reg = loadRegistry();
   if (reg.defaults.serverHost) {
-    activeCentral = { host: reg.defaults.serverHost, port: reg.defaults.serverWsPort };
-    const now = Date.now();
-    if (now - lastCentralLogAt > 5000) {
-      console.log(`[edge] using configured central ${activeCentral.host}:${activeCentral.port}`);
-      lastCentralLogAt = now;
+    const newHost = reg.defaults.serverHost;
+    const newPort = reg.defaults.serverWsPort;
+    if (activeCentral && (activeCentral.host !== newHost || activeCentral.port !== newPort)) {
+      console.log(`[edge] central changed to ${newHost}:${newPort}, reconnecting...`);
+      activeCentral = { host: newHost, port: newPort };
+      if (ws) { try { ws.close(); } catch {} ws = null; }
+      for (const state of running.values()) {
+        stopProcess(state, "central-changed");
+        state.suppressRestart = false;
+      }
+      return activeCentral;
+    }
+    if (!activeCentral) {
+      activeCentral = { host: newHost, port: newPort };
+      console.log(`[edge] using configured central ${newHost}:${newPort}`);
     }
     return activeCentral;
   }
+  if (activeCentral) return activeCentral;
   console.log("[edge] discovering central via mDNS...");
   const found = await discoverCentral({ timeoutMs: 5000 });
   if (found) {

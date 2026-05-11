@@ -38,18 +38,29 @@ function getEdgeCameraStatuses(hub) {
   return out;
 }
 
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
 export function createApi({ config, db, hub, refreshConfig }) {
   const app = express();
   app.use(morgan("tiny", {
-    skip: (req) => req.path.startsWith("/api/cameras") || req.path.startsWith("/api/edges")
+    skip: (req) => req.path.startsWith("/api/cameras") || req.path.startsWith("/api/edges") || req.path.startsWith("/api/whep")
   }));
-  app.use(express.json());
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/whep")) return next();
+    express.json()(req, res, next);
+  });
 
   // ---- Cameras ---------------------------------------------------------------
 
   app.get("/api/cameras", async (req, res) => {
     const hlsBaseUrl = normalizeBaseUrl(config.ui?.hlsBaseUrl) || `${req.protocol}://${req.hostname}:${config.mediamtx.hlsPort}`;
-    const webrtcBaseUrl = normalizeBaseUrl(config.ui?.webrtcBaseUrl) || `${req.protocol}://${req.hostname}:${config.mediamtx.webrtcPort}`;
     const livePaths = await getLivePaths(config);
     const edgeStatuses = getEdgeCameraStatuses(hub);
     const latestByCamera = db.prepare(`
@@ -70,7 +81,7 @@ export function createApi({ config, db, hub, refreshConfig }) {
       }
       return {
         ...cam,
-        webrtcUrl: `${webrtcBaseUrl}/${cam.id}/whep`,
+        webrtcUrl: `/api/whep/${cam.id}`,
         hlsUrl: `${hlsBaseUrl}/${cam.id}/index.m3u8`,
         health: {
           status,
@@ -80,6 +91,45 @@ export function createApi({ config, db, hub, refreshConfig }) {
       };
     });
     res.json({ cameras });
+  });
+
+  // ---- WHEP proxy (WebRTC signaling through API) ------------------------------
+
+  app.post("/api/whep/:camId", async (req, res) => {
+    const upstream = `http://127.0.0.1:${config.mediamtx.webrtcPort}/${req.params.camId}/whep`;
+    try {
+      const sdp = await getRawBody(req);
+      const resp = await fetch(upstream, {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: sdp
+      });
+      if (!resp.ok) return res.status(resp.status).end();
+      const loc = resp.headers.get("location");
+      if (loc) res.setHeader("Location", loc.replace(/^\//, `/api/whep-session/`));
+      res.status(resp.status).type("application/sdp").send(await resp.text());
+    } catch {
+      res.status(502).end();
+    }
+  });
+
+  app.all("/api/whep-session/*", async (req, res) => {
+    const sessionPath = req.path.replace("/api/whep-session/", "/");
+    const upstream = `http://127.0.0.1:${config.mediamtx.webrtcPort}${sessionPath}`;
+    try {
+      const opts = { method: req.method, headers: {} };
+      if (req.method === "PATCH") {
+        opts.headers["Content-Type"] = req.headers["content-type"] || "application/trickle-ice-sdpfrag";
+        opts.body = await getRawBody(req);
+      }
+      const resp = await fetch(upstream, opts);
+      res.status(resp.status);
+      const ct = resp.headers.get("content-type");
+      if (ct) res.type(ct);
+      res.send(await resp.text());
+    } catch {
+      res.status(502).end();
+    }
   });
 
   app.get("/api/playback/:cameraId", async (req, res) => {

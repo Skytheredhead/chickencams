@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Thermometer, Play, Pause, Square, Home, AlertTriangle, Maximize2, Minimize2 } from "lucide-react";
 import { useLiveStore } from "../store.js";
-import { usePrinterInfo, usePrinterGcode, usePrinterEmergencyStop } from "../api/queries.js";
+import { usePrinterInfo, usePrinterStatus, usePrinterGcode, usePrinterEmergencyStop } from "../api/queries.js";
 
 const PRESETS = [
   { label: "PLA", hotend: 200, bed: 60 },
@@ -53,20 +53,22 @@ function StateBadge({ state }) {
 }
 
 export default function PrinterView() {
-  const printer = useLiveStore((s) => s.printer);
+  const wsPrinter = useLiveStore((s) => s.printer);
   const { data: info, isError: infoError } = usePrinterInfo();
+  const { data: statusData } = usePrinterStatus();
   const gcode = usePrinterGcode();
   const estop = usePrinterEmergencyStop();
   const [fluiddExpanded, setFluiddExpanded] = useState(false);
 
-  const state = printer?.state || info?.result?.state || null;
-  const progress = printer?.progress ?? 0;
-  const filename = printer?.filename || "";
-  const printDuration = printer?.printDuration ?? 0;
-  const hotend = printer?.hotend;
-  const hotendTarget = printer?.hotendTarget ?? 0;
-  const bed = printer?.bed;
-  const bedTarget = printer?.bedTarget ?? 0;
+  const st = statusData?.result?.status;
+  const state = wsPrinter?.state || st?.print_stats?.state || info?.result?.state || null;
+  const progress = wsPrinter?.progress ?? st?.virtual_sdcard?.progress ?? 0;
+  const filename = wsPrinter?.filename || st?.print_stats?.filename || "";
+  const printDuration = wsPrinter?.printDuration ?? st?.print_stats?.print_duration ?? 0;
+  const hotend = wsPrinter?.hotend ?? st?.extruder?.temperature ?? null;
+  const hotendTarget = wsPrinter?.hotendTarget ?? st?.extruder?.target ?? 0;
+  const bed = wsPrinter?.bed ?? st?.heater_bed?.temperature ?? null;
+  const bedTarget = wsPrinter?.bedTarget ?? st?.heater_bed?.target ?? 0;
 
   const isPrinting = state === "printing";
   const isPaused = state === "paused";
