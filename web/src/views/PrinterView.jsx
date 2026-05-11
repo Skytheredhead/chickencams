@@ -191,10 +191,10 @@ export default function PrinterView() {
           </button>
         </div>
         <iframe
-          src="/api/printer/moonraker/../"
+          src="https://printer.skylarenns.com/"
           className={`w-full border-0 transition-all duration-300 ${fluiddExpanded ? "h-[85vh]" : "h-[500px]"}`}
           title="Fluidd"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+          allow="clipboard-read; clipboard-write"
         />
       </div>
     </div>
