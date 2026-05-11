@@ -73,12 +73,12 @@ detect_input_format() {
   formats_output=$(v4l2-ctl --device "${DEVICE}" --list-formats-ext 2>/dev/null || true)
 
   if [[ -n "${formats_output}" ]]; then
-    log "Supported formats for ${DEVICE}:"
+    log "Supported formats for ${DEVICE}:" >&2
     while IFS= read -r line; do
-      [[ -n "${line}" ]] && log "  ${line}"
+      [[ -n "${line}" ]] && log "  ${line}" >&2
     done <<< "${formats_output}"
   else
-    log "Could not enumerate formats for ${DEVICE}"
+    log "Could not enumerate formats for ${DEVICE}" >&2
     echo ""
     return
   fi
